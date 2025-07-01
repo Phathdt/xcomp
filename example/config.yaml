@@ -1,5 +1,5 @@
 app:
-  name: 'Product API'
+  name: 'API Server'
   version: '1.0.0'
   environment: 'development'
   debug: true
@@ -10,7 +10,7 @@ database:
   port: 5432
   username: 'postgres'
   password: 'password'
-  database: 'productdb'
+  database: 'example_db'
   sslmode: 'disable'
   max_connections: 25
   max_idle_connections: 10

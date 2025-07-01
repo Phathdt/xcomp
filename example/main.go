@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"example/infrastructure/database"
+	"example/modules/order"
+	orderRoutes "example/modules/order/infrastructure/http/routes"
 	"example/modules/product"
 	"example/modules/product/infrastructure/http/routes"
 
@@ -43,10 +45,12 @@ func createInfrastructureModule(container *xcomp.Container) xcomp.Module {
 func createAppModule(container *xcomp.Container) xcomp.Module {
 	infrastructureModule := createInfrastructureModule(container)
 	productModule := product.CreateProductModule()
+	orderModule := order.NewOrderModule()
 
 	return xcomp.NewModule().
 		Import(infrastructureModule).
 		Import(productModule).
+		Import(orderModule).
 		Build()
 }
 
@@ -86,7 +90,7 @@ func setupFiberApp(configService *xcomp.ConfigService) *fiber.App {
 		return c.JSON(fiber.Map{
 			"status":    "healthy",
 			"timestamp": time.Now().Unix(),
-			"service":   "Product API",
+			"service":   "API Server",
 		})
 	})
 
@@ -94,7 +98,7 @@ func setupFiberApp(configService *xcomp.ConfigService) *fiber.App {
 }
 
 func main() {
-	log.Println("Starting Product API...")
+	log.Println("Starting API Server...")
 
 	container := xcomp.NewContainer()
 
@@ -120,6 +124,12 @@ func main() {
 		log.Fatal("Failed to get ProductRoutes")
 	}
 	productRoutes.SetupRoutes(app)
+
+	orderRoutesInstance, ok := container.Get("OrderRoutes").(*orderRoutes.OrderRoutes)
+	if !ok {
+		log.Fatal("Failed to get OrderRoutes")
+	}
+	orderRoutesInstance.SetupRoutes(app)
 
 	port := configService.GetInt("app.port", 3000)
 
