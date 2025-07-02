@@ -3,12 +3,14 @@
 A complete example application showcasing the XComp dependency injection framework with:
 
 - **Professional CLI Interface** using `github.com/urfave/cli/v2`
-- **Comprehensive Makefile** for easy development and deployment
+- **Comprehensive Makefile** with 40+ targets for development and deployment
+- **Goose Database Migrations** with full rollback support
 - **Colored Terminal Logging** with automatic detection
 - **Clean Architecture** with domain-driven design
 - **Docker Compose** setup with PostgreSQL and Redis
 - **Structured Logging** with Zap
 - **Hot Reload** development environment
+- **Production-Ready Configuration** management
 
 ## 🚀 Quick Start
 
@@ -18,20 +20,20 @@ A complete example application showcasing the XComp dependency injection framewo
 # Show all available commands
 make help
 
-# Setup development environment
+# Setup complete development environment (Docker + Migrations)
 make dev-setup
 
-# Run with colored console logging (development)
-make run-color
+# Run in development mode (colored console, debug)
+make run-dev
 
-# Run with JSON logging (production)
-make run-json
+# Run in production mode (JSON logs, info level)
+make run-prod
+
+# Hot reload development
+make dev
 
 # Build the application
 make build
-
-# Run tests
-make test
 ```
 
 ### Using CLI Directly
@@ -44,7 +46,7 @@ go run . --help
 go run . serve
 
 # Start with custom config and port
-go run . serve --config config-color.yaml --port 8080
+go run . serve --config config-dev.yaml --port 8080
 
 # Show version information
 go run . version
@@ -73,177 +75,336 @@ go run . health
 
 ## 🔨 Makefile Targets
 
-### Development
-- `make run` - Run with default settings
-- `make run-color` - Run with colored console logging
-- `make run-console` - Run with auto-detected colors
-- `make run-json` - Run with JSON logging
-- `make dev` - Run with hot reload (requires air)
-- `make dev-setup` - Setup development environment
+### 🚀 Primary Development Workflow
+- `make run-dev` - **Development mode** (colored console, debug level)
+- `make run-prod` - **Production mode** (JSON logs, info level)
+- `make dev` - **Hot reload** development with Air
+- `make dev-setup` - **Complete setup** (dependencies + Docker + migrations)
 
-### Building
-- `make build` - Build the binary
-- `make build-linux` - Build for Linux
-- `make build-windows` - Build for Windows
-- `make build-mac` - Build for macOS
-- `make build-all` - Build for all platforms
+### 🗄️ Database & Migrations (Goose)
+- `make db-setup` - Setup database with Docker and run migrations
+- `make db-reset` - Reset and setup database from scratch
+- `make migrate-up` - Apply all pending migrations
+- `make migrate-down` - Rollback one migration
+- `make migrate-status` - Show migration status
+- `make migrate-version` - Show current migration version
+- `make migrate-create NAME=migration_name` - Create new migration
+- `make migrate-reset` - Reset all migrations (⚠️ destructive)
+- `make migrate-redo` - Redo the last migration
+- `make migrate-validate` - Validate all migrations
 
-### Docker
-- `make docker-up` - Start all services
-- `make docker-down` - Stop all services
-- `make docker-restart` - Restart services
-- `make docker-clean` - Clean Docker resources
+### 🔨 Building & Testing
+- `make build` - Build the binary with version info
+- `make test` - Run all tests
+- `make test-coverage` - Run tests with coverage report
+- `make benchmark` - Run performance benchmarks
+- `make lint` - Run code linters
+- `make format` - Format code with gofmt
 
-### Testing & Quality
-- `make test` - Run tests
-- `make test-coverage` - Run tests with coverage
-- `make lint` - Run linters
-- `make format` - Format code
+### 🐳 Docker Management
+- `make docker-up` - Start PostgreSQL + Redis services
+- `make docker-down` - Stop all Docker services
+- `make docker-restart` - Restart Docker services
+- `make docker-clean` - Clean Docker resources and volumes
+- `make docker-logs` - Show Docker service logs
 
-### Utilities
-- `make clean` - Clean build artifacts
-- `make deps` - Download dependencies
+### 🧹 Utilities
+- `make clean` - Clean build artifacts and cache
+- `make deps` - Download and tidy dependencies
+- `make update` - Update dependencies to latest versions
 - `make version` - Show version information
-- `make info` - Show build information
+- `make info` - Show detailed build information
+- `make health` - Check application health
+- `make deploy-check` - Verify deployment readiness
 
-## 🌈 Logging Configurations
+## 🌈 Configuration Profiles
 
-### config.yaml (Production - JSON)
+### config-dev.yaml (Development)
 ```yaml
+app:
+  name: 'XComp API Server [DEV] 🚀'
+  environment: 'development'
+
 logging:
-  level: 'info'
-  format: 'json'
-  development: false
+  level: 'debug'           # Show all messages
+  format: 'console'        # Human-readable format
+  force_colors: true       # Colored output
+  enable_stacktrace: true  # Debug info
+
+database:
+  max_connections: 10      # Lower for development
 ```
 
-### config-console.yaml (Development - Auto Colors)
+### config-prod.yaml (Production)
 ```yaml
+app:
+  name: 'XComp API Server'
+  environment: 'production'
+
 logging:
-  level: 'debug'
-  format: 'console'
-  development: true
-  level_format: 'capital'  # Auto-detects terminal colors
+  level: 'info'           # Essential messages only
+  format: 'json'          # Structured logging
+  disable_colors: true    # Clean output
+
+database:
+  max_connections: 25     # Higher for production
 ```
 
-### config-color.yaml (Demo - Forced Colors)
-```yaml
-logging:
-  level: 'debug'
-  format: 'console'
-  development: true
-  force_colors: true  # Forces colors even without terminal detection
+## 🗄️ Database Migrations with Goose
+
+### Migration Commands
+```bash
+# Check current migration status
+make migrate-status
+
+# Create a new migration
+make migrate-create NAME=add_users_table
+
+# Apply all pending migrations
+make migrate-up
+
+# Rollback one migration
+make migrate-down
+
+# Show current version
+make migrate-version
+
+# Validate all migration files
+make migrate-validate
 ```
 
-## 🏗️ Build Information
+### Migration File Structure
+```
+migrations/
+├── 001_create_products_table.sql
+├── 002_create_orders_tables.sql
+└── 20250702014452_add_update_trigger_function.sql
+```
 
-The build system automatically injects version information:
+### Example Migration File
+```sql
+-- +goose Up
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- +goose Down
+DROP TABLE IF EXISTS users;
+```
+
+## 🏗️ Build System & Versioning
+
+The build system automatically injects Git information:
 
 ```bash
-# Using make
-make build    # Injects git info automatically
+# Automatic version injection
+make build
+./build/api-server version
+# Output: Version: v1.2.3-abc123, Build Time: 2025-07-02_08:45:00
 
-# Using go directly
-go build -ldflags "-X main.Version=v1.0.0 -X main.BuildTime=2024-01-01 -X main.GitCommit=abc123"
+# Manual version override
+VERSION=v2.0.0 make build
 ```
 
 ## 🔄 Hot Reload Development
 
-Install Air for hot reloading:
-
 ```bash
+# Install development tools
 make install-tools
-make dev
-```
 
-Or manually:
-```bash
-go install github.com/air-verse/air@latest
+# Start hot reload development
+make dev
+
+# Manual Air usage
 air
 ```
 
-## 🐳 Docker Development
+The `.air.toml` configuration automatically:
+- Restarts on Go file changes
+- Uses development config (`config-dev.yaml`)
+- Excludes build artifacts and vendor directories
+
+## 🐳 Docker Development Environment
 
 ```bash
-# Start all services (PostgreSQL + Redis)
-make docker-up
+# Complete development setup
+make dev-setup
 
-# Run application
-make run-color
-
-# Stop services
-make docker-down
+# Or step by step:
+make docker-up        # Start PostgreSQL + Redis
+make migrate-up       # Run database migrations
+make run-dev          # Start application
 ```
 
-## 📊 Example Usage
+### Docker Services
+- **PostgreSQL 15** on port 5432 with health checks
+- **Redis 7** on port 6379 with health checks
+- **Automatic service orchestration** with docker-compose
 
-### JSON Logging Output
+## 📊 Logging Examples
+
+### Development Console Output (Colored)
+```
+2025-07-02T08:25:24.253+0700    DEBUG   services/product_service.go:28   Getting product    {"product_id": "123e4567-e89b-12d3-a456-426614174000"}
+2025-07-02T08:25:24.254+0700    INFO    services/product_service.go:45   Product retrieved successfully    {"product_id": "123e4567-e89b-12d3-a456-426614174000", "cached": false}
+```
+
+### Production JSON Output
 ```json
-{"level":"INFO","timestamp":"2025-07-02T08:25:23.244+0700","caller":"xcomp/logger.go:238","message":"Starting API Server","version":"1.0.0","environment":"development"}
-```
-
-### Colored Console Output
-```
-2025-07-02T08:25:24.253+0700    INFO    logger.go:238 Starting API Server    {"version": "1.0.0", "environment": "development", "name": "Colorful API Server 🌈"}
+{"level":"INFO","timestamp":"2025-07-02T08:25:23.244+0700","caller":"services/product_service.go:45","message":"Product retrieved successfully","product_id":"123e4567-e89b-12d3-a456-426614174000","cached":false}
 ```
 
 ## 🔗 API Endpoints
 
-- `GET /health` - Health check
-- `GET /api/products` - List products
-- `POST /api/products` - Create product
-- `GET /api/products/{id}` - Get product by ID
-- `PUT /api/products/{id}` - Update product
+### Health & Info
+- `GET /health` - Health check with version info
+
+### Products API
+- `GET /api/products` - List products with pagination
+- `POST /api/products` - Create new product
+- `GET /api/products/{id}` - Get product by ID (with Redis caching)
+- `PUT /api/products/{id}` - Update existing product
 - `DELETE /api/products/{id}` - Delete product
 
-## 🚀 Deployment
+### Orders API
+- `GET /api/orders` - List orders by customer
+- `POST /api/orders` - Create new order with items
+- `GET /api/orders/{id}` - Get order by ID (with Redis caching)
+- `PUT /api/orders/{id}/status` - Update order status
+
+## 🧪 Testing & Quality Assurance
 
 ```bash
-# Check deployment readiness
+# Run all tests
+make test
+
+# Generate coverage report
+make test-coverage
+
+# Run performance benchmarks
+make benchmark
+
+# Code quality checks
+make lint
+make format
+
+# Pre-deployment validation
 make deploy-check
+```
 
-# Build release binaries
-make release
+## 🚀 Production Deployment
 
-# Production build
+### Quick Deploy
+```bash
+# Build optimized production binary
 make build
-./build/api-server serve --config config.yaml
+
+# Run in production mode
+CONFIG_FILE=config-prod.yaml ./build/api-server serve
+```
+
+### Advanced Deployment
+
+# Complete release package
+make release
 ```
 
 ## 🛠️ Development Workflow
 
+### Daily Development
 ```bash
-# 1. Setup environment
+# 1. Start development environment
 make dev-setup
 
-# 2. Start development with hot reload
+# 2. Create database migration (if needed)
+make migrate-create NAME=add_new_feature
+
+# 3. Start hot reload development
 make dev
 
-# 3. Run tests
+# 4. Run tests periodically
 make test
 
-# 4. Format code
-make format
+# 5. Check code quality
+make lint format
+```
 
-# 5. Build and test
+### Feature Development
+```bash
+# 1. Create feature branch
+git checkout -b feature/new-api
+
+# 2. Develop with hot reload
+make dev
+
+# 3. Test database changes
+make migrate-status
+make migrate-up
+
+# 4. Validate before commit
+make test lint deploy-check
+
+# 5. Build and test production mode
 make build
 make run-prod
 ```
 
-## 📁 Project Structure
+## 📁 Project Architecture
 
 ```
 example/
-├── build/              # Build artifacts
-├── infrastructure/     # Database, Redis connections
-├── modules/           # Business modules (product, order)
-│   ├── product/       # Product module
-│   └── order/         # Order module
-├── migrations/        # Database migrations
-├── config*.yaml       # Configuration files
-├── docker-compose.yml # Docker services
-├── Makefile          # Build automation
-├── .air.toml         # Hot reload config
-└── main.go           # CLI application entry point
+├── build/                          # Build artifacts
+├── infrastructure/
+│   └── database/                   # Database connections
+│       ├── interfaces.go           # Database interfaces
+│       ├── postgres.go             # PostgreSQL connection
+│       └── redis.go                # Redis connection
+├── modules/                        # Business domains
+│   ├── product/                    # Product module
+│   │   ├── domain/                 # Business logic
+│   │   │   ├── entities/           # Domain entities
+│   │   │   └── interfaces/         # Repository interfaces
+│   │   ├── application/            # Application services
+│   │   │   ├── dto/                # Data transfer objects
+│   │   │   └── services/           # Business services
+│   │   ├── infrastructure/         # External concerns
+│   │   │   ├── persistence/        # Database repositories
+│   │   │   └── http/               # HTTP controllers & routes
+│   │   └── product.module.go       # Module definition
+│   └── order/                      # Order module (similar structure)
+├── migrations/                     # Database migrations (Goose)
+│   ├── 001_create_products_table.sql
+│   ├── 002_create_orders_tables.sql
+│   └── 20250702014452_add_update_trigger_function.sql
+├── config-dev.yaml                 # Development configuration
+├── config-prod.yaml                # Production configuration
+├── docker-compose.yml              # Docker services
+├── Makefile                        # Build automation (40+ targets)
+├── .air.toml                       # Hot reload configuration
+├── sqlc.yaml                       # SQL code generation
+└── main.go                         # CLI application entry point
 ```
 
-This example demonstrates a production-ready Go application with professional development tooling and clean architecture principles.
+## 🎯 XComp Framework Features
+
+### Dependency Injection
+- **Automatic injection** via struct tags (`inject:"ServiceName"`)
+- **Lazy loading** with singleton pattern
+- **Module system** inspired by NestJS
+- **Interface-based architecture** for testability
+
+### Configuration Management
+- **YAML configuration** with environment variable overrides
+- **Multiple environments** (dev/prod configs)
+- **Type-safe access** with default values
+- **Hot configuration** switching via environment variables
+
+### Structured Logging
+- **Zap-based logging** with contextual fields
+- **Configurable outputs** (console/JSON)
+- **Automatic color detection** for terminals
+- **Log level control** per environment
+
+This example demonstrates a **production-ready Go application** with enterprise-grade tooling, clean architecture principles, and comprehensive database migration management using Goose.
