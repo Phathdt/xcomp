@@ -6,12 +6,7 @@ app:
   port: 3000
 
 database:
-  host: 'localhost'
-  port: 5432
-  username: 'postgres'
-  password: 'password'
-  database: 'example_db'
-  sslmode: 'disable'
+  url: 'postgresql://postgres:secretpassword@prod-db.example.com:5432/production_db?sslmode=require'
   max_connections: 50
   max_idle_connections: 25
   max_lifetime_minutes: 60
@@ -70,10 +65,7 @@ pagination:
   max_page_size: 100
 
 redis:
-  host: 'redis'
-  port: 6379
-  password: ''
-  db: 0
+  url: 'redis://:redis_secret_password@redis.example.com:6379/0'
 
 async:
   monitor:

@@ -20,17 +20,9 @@ func (dc *DatabaseConnection) GetServiceName() string {
 }
 
 func (dc *DatabaseConnection) Initialize() error {
-	host := dc.Config.GetString("database.host", "localhost")
-	port := dc.Config.GetInt("database.port", 5432)
-	user := dc.Config.GetString("database.username", "postgres")
-	password := dc.Config.GetString("database.password", "password")
-	dbname := dc.Config.GetString("database.database", "productdb")
-	sslmode := dc.Config.GetString("database.sslmode", "disable")
+	databaseURL := dc.Config.GetString("database.url", "postgresql://postgres:password@localhost:5432/productdb?sslmode=disable")
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		user, password, host, port, dbname, sslmode)
-
-	config, err := pgxpool.ParseConfig(dsn)
+	config, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse database config: %w", err)
 	}

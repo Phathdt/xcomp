@@ -39,8 +39,9 @@ func createInfrastructureModule(container *xcomp.Container) xcomp.Module {
 		AddFactory("ConfigService", func(container *xcomp.Container) any {
 			configFile := os.Getenv("CONFIG_FILE")
 			if configFile == "" {
-				configFile = "config.yaml"
+				configFile = "config-dev.yaml"
 			}
+
 			return xcomp.NewConfigService(configFile)
 		}).
 		AddFactory("Logger", func(container *xcomp.Container) any {
@@ -100,9 +101,9 @@ func createAppModule(container *xcomp.Container) xcomp.Module {
 
 func setupFiberApp(configService *xcomp.ConfigService) *fiber.App {
 	app := fiber.New(fiber.Config{
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  time.Duration(configService.GetInt("server.read_timeout_seconds", 30)) * time.Second,
+		WriteTimeout: time.Duration(configService.GetInt("server.write_timeout_seconds", 30)) * time.Second,
+		IdleTimeout:  time.Duration(configService.GetInt("server.timeout_seconds", 30)) * time.Second,
 		Prefork:      configService.GetBool("server.prefork", false),
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
@@ -123,10 +124,14 @@ func setupFiberApp(configService *xcomp.ConfigService) *fiber.App {
 	}))
 
 	if configService.GetBool("server.cors.enabled", true) {
+		allowedOrigins := configService.GetString("server.cors.allowed_origins", "*")
+		allowedMethods := configService.GetString("server.cors.allowed_methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH")
+		allowedHeaders := configService.GetString("server.cors.allowed_headers", "Content-Type,Authorization")
+
 		app.Use(cors.New(cors.Config{
-			AllowOrigins: "*",
-			AllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-			AllowHeaders: "Content-Type,Authorization",
+			AllowOrigins: allowedOrigins,
+			AllowMethods: allowedMethods,
+			AllowHeaders: allowedHeaders,
 		}))
 	}
 
@@ -134,7 +139,7 @@ func setupFiberApp(configService *xcomp.ConfigService) *fiber.App {
 		return c.JSON(fiber.Map{
 			"status":    "healthy",
 			"timestamp": time.Now().Unix(),
-			"service":   "API Server",
+			"service":   configService.GetString("app.name", "API Server"),
 			"version":   Version,
 		})
 	})
@@ -235,38 +240,23 @@ func serveCommand(c *cli.Context) error {
 		}
 	}()
 
+	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Shutdown signal received, beginning graceful shutdown")
+	logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	// Cancel async context first
+	asyncCancel()
 
-	if err := app.ShutdownWithContext(ctx); err != nil {
-		logger.Error("Server forced to shutdown",
-			xcomp.Field("error", err),
-			xcomp.Field("timeout", "30s"))
-	} else {
-		logger.Info("HTTP server shutdown completed")
+	// Shutdown Fiber server
+	if err := app.ShutdownWithTimeout(30 * time.Second); err != nil {
+		logger.Error("Server forced to shutdown", xcomp.Field("error", err))
+		return err
 	}
 
-	// Stop async service
-	if asyncService != nil {
-		asyncService.Stop()
-	}
-
-	if dbConn, ok := container.Get("DatabaseConnection").(*database.DatabaseConnection); ok {
-		if err := dbConn.Close(); err != nil {
-			logger.Error("Failed to close database connection",
-				xcomp.Field("error", err))
-		} else {
-			logger.Info("Database connection closed successfully")
-		}
-	}
-
-	logger.Info("Application shutdown completed")
+	logger.Info("Server exited successfully")
 	return nil
 }
 
