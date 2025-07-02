@@ -11,11 +11,8 @@ import (
 
 	"example/infrastructure/database"
 	"example/modules/customer"
-	customerRoutes "example/modules/customer/infrastructure/http/routes"
 	"example/modules/order"
-	orderRoutes "example/modules/order/infrastructure/http/routes"
 	"example/modules/product"
-	"example/modules/product/infrastructure/http/routes"
 
 	"xcomp"
 
@@ -48,6 +45,12 @@ func createInfrastructureModule(container *xcomp.Container) xcomp.Module {
 			}
 			return xcomp.NewDevelopmentLogger()
 		}).
+		AddFactory("RedisClient", func(container *xcomp.Container) any {
+			redisService := &database.RedisService{}
+			container.Inject(redisService)
+			redisService.Initialize()
+			return redisService.GetClient()
+		}).
 		AddFactory("DatabaseConnection", func(container *xcomp.Container) any {
 			dbConn := &database.DatabaseConnection{}
 			if err := container.Inject(dbConn); err != nil {
@@ -78,12 +81,14 @@ func createAppModule(container *xcomp.Container) xcomp.Module {
 	productModule := product.CreateProductModule()
 	orderModule := order.NewOrderModule()
 	customerModule := customer.CreateCustomerModule()
+	transportModule := CreateTransportModule()
 
 	return xcomp.NewModule().
 		Import(infrastructureModule).
 		Import(productModule).
 		Import(orderModule).
 		Import(customerModule).
+		Import(transportModule).
 		Build()
 }
 
@@ -163,29 +168,9 @@ func serveCommand(c *cli.Context) error {
 
 	app := setupFiberApp(configService)
 
-	productRoutes, ok := container.Get("ProductRoutes").(*routes.ProductRoutes)
-	if !ok {
-		logger.Fatal("Failed to get ProductRoutes from container")
-		return nil
-	}
-	productRoutes.SetupRoutes(app)
-	logger.Debug("Product routes registered")
-
-	orderRoutesInstance, ok := container.Get("OrderRoutes").(*orderRoutes.OrderRoutes)
-	if !ok {
-		logger.Fatal("Failed to get OrderRoutes from container")
-		return nil
-	}
-	orderRoutesInstance.SetupRoutes(app)
-	logger.Debug("Order routes registered")
-
-	customerRoutesInstance, ok := container.Get("CustomerRoutes").(*customerRoutes.CustomerRoutes)
-	if !ok {
-		logger.Fatal("Failed to get CustomerRoutes from container")
-		return nil
-	}
-	customerRoutesInstance.SetupRoutes(app)
-	logger.Debug("Customer routes registered")
+	// Setup centralized routes
+	setupRoutes(app, container)
+	logger.Debug("All routes registered")
 
 	port := c.Int("port")
 	if port == 0 {

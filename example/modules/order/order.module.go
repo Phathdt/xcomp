@@ -2,9 +2,7 @@ package order
 
 import (
 	"example/modules/order/application/services"
-	"example/modules/order/infrastructure/http/controllers"
-	"example/modules/order/infrastructure/http/routes"
-	"example/modules/order/infrastructure/persistence"
+	"example/modules/order/infrastructure/repositories"
 	"xcomp"
 )
 
@@ -16,29 +14,19 @@ func NewOrderModule() xcomp.Module {
 			return service
 		}).
 		AddFactory("OrderRepository", func(c *xcomp.Container) any {
-			repo := &persistence.OrderRepositoryImpl{}
+			repo := &repositories.OrderRepositoryImpl{}
 			c.Inject(repo)
 			return repo
 		}).
 		AddFactory("OrderItemRepository", func(c *xcomp.Container) any {
-			repo := &persistence.OrderItemRepositoryImpl{}
+			repo := &repositories.OrderItemRepositoryImpl{}
 			c.Inject(repo)
 			return repo
 		}).
 		AddFactory("OrderCacheRepository", func(c *xcomp.Container) any {
-			cacheRepo := &persistence.OrderCacheRepositoryImpl{}
+			cacheRepo := &repositories.OrderCacheRepositoryImpl{}
 			c.Inject(cacheRepo)
 			return cacheRepo
-		}).
-		AddFactory("OrderController", func(c *xcomp.Container) any {
-			controller := &controllers.OrderController{}
-			c.Inject(controller)
-			return controller
-		}).
-		AddFactory("OrderRoutes", func(c *xcomp.Container) any {
-			routes := &routes.OrderRoutes{}
-			c.Inject(routes)
-			return routes
 		}).
 		Build()
 }
