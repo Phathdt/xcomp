@@ -9,6 +9,8 @@ import (
 	"example/modules/order/domain/entities"
 	"example/modules/order/domain/interfaces"
 
+	"xcomp"
+
 	"github.com/google/uuid"
 )
 
@@ -16,6 +18,7 @@ type OrderService struct {
 	orderRepo      interfaces.OrderRepository      `inject:"OrderRepository"`
 	orderItemRepo  interfaces.OrderItemRepository  `inject:"OrderItemRepository"`
 	orderCacheRepo interfaces.OrderCacheRepository `inject:"OrderCacheRepository"`
+	Logger         xcomp.Logger                    `inject:"Logger"`
 }
 
 func NewOrderService() *OrderService {
@@ -23,7 +26,9 @@ func NewOrderService() *OrderService {
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, req dto.CreateOrderRequest) (*dto.OrderResponse, error) {
-	log.Printf("OrderService: Creating order for customer %s", req.CustomerID)
+	s.Logger.Info("Creating order",
+		xcomp.Field("customer_id", req.CustomerID),
+		xcomp.Field("items_count", len(req.Items)))
 
 	order := entities.NewOrder(req.CustomerID)
 	order.ShippingAddress = req.ShippingAddress
@@ -58,7 +63,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, req dto.CreateOrderReque
 }
 
 func (s *OrderService) GetOrderByID(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
-	log.Printf("OrderService: Getting order by ID %s", id)
+	s.Logger.Info("Getting order by ID", xcomp.Field("order_id", id))
 
 	order, err := s.orderCacheRepo.Get(ctx, id)
 	if err != nil {
@@ -74,7 +79,9 @@ func (s *OrderService) GetOrderByID(ctx context.Context, id uuid.UUID) (*dto.Ord
 		order.OrderItems = items
 
 		if setErr := s.orderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
-			log.Printf("Failed to cache order: %v", setErr)
+			s.Logger.Warn("Failed to cache order",
+				xcomp.Field("order_id", id),
+				xcomp.Field("error", setErr))
 		}
 	} else if order == nil {
 		order, err = s.orderRepo.GetByID(ctx, id)
@@ -98,7 +105,10 @@ func (s *OrderService) GetOrderByID(ctx context.Context, id uuid.UUID) (*dto.Ord
 }
 
 func (s *OrderService) GetOrdersByCustomerID(ctx context.Context, customerID uuid.UUID, page, pageSize int32) (*dto.OrderListResponse, error) {
-	log.Printf("OrderService: Getting orders for customer %s", customerID)
+	s.Logger.Info("Getting orders for customer",
+		xcomp.Field("customer_id", customerID),
+		xcomp.Field("page", page),
+		xcomp.Field("page_size", pageSize))
 
 	offset := (page - 1) * pageSize
 	orders, err := s.orderRepo.GetByCustomerID(ctx, customerID, pageSize, offset)
@@ -176,7 +186,7 @@ func (s *OrderService) GetOrdersByStatus(ctx context.Context, status entities.Or
 }
 
 func (s *OrderService) UpdateOrder(ctx context.Context, id uuid.UUID, req dto.UpdateOrderRequest) (*dto.OrderResponse, error) {
-	log.Printf("OrderService: Updating order %s", id)
+	s.Logger.Info("Updating order", xcomp.Field("order_id", id))
 
 	order, err := s.orderRepo.GetByID(ctx, id)
 	if err != nil {

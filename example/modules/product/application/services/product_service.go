@@ -9,12 +9,15 @@ import (
 	"example/modules/product/domain/entities"
 	"example/modules/product/domain/interfaces"
 
+	"xcomp"
+
 	"github.com/google/uuid"
 )
 
 type ProductService struct {
 	ProductRepo      interfaces.ProductRepository      `inject:"ProductRepository"`
 	ProductCacheRepo interfaces.ProductCacheRepository `inject:"ProductCacheRepository"`
+	Logger           xcomp.Logger                      `inject:"Logger"`
 }
 
 func (ps *ProductService) GetServiceName() string {
@@ -22,29 +25,57 @@ func (ps *ProductService) GetServiceName() string {
 }
 
 func (ps *ProductService) GetProduct(ctx context.Context, id uuid.UUID) (*dto.ProductResponse, error) {
+	ps.Logger.Debug("Getting product", xcomp.Field("product_id", id))
+
 	product, err := ps.ProductCacheRepo.Get(ctx, id)
 	if err != nil {
+		ps.Logger.Debug("Product not found in cache, fetching from database",
+			xcomp.Field("product_id", id),
+			xcomp.Field("cache_error", err))
+
 		product, err = ps.ProductRepo.GetByID(ctx, id)
 		if err != nil {
+			ps.Logger.Error("Failed to get product from database",
+				xcomp.Field("product_id", id),
+				xcomp.Field("error", err))
 			return nil, err
 		}
 
 		if setErr := ps.ProductCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
+			ps.Logger.Warn("Failed to cache product",
+				xcomp.Field("product_id", id),
+				xcomp.Field("error", setErr))
 		}
 	} else if product == nil {
+		ps.Logger.Debug("Product cache miss, fetching from database",
+			xcomp.Field("product_id", id))
+
 		product, err = ps.ProductRepo.GetByID(ctx, id)
 		if err != nil {
+			ps.Logger.Error("Failed to get product from database",
+				xcomp.Field("product_id", id),
+				xcomp.Field("error", err))
 			return nil, err
 		}
 
 		if setErr := ps.ProductCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
+			ps.Logger.Warn("Failed to cache product",
+				xcomp.Field("product_id", id),
+				xcomp.Field("error", setErr))
 		}
+	} else {
+		ps.Logger.Debug("Product found in cache", xcomp.Field("product_id", id))
 	}
+
+	ps.Logger.Info("Product retrieved successfully",
+		xcomp.Field("product_id", id),
+		xcomp.Field("product_name", product.Name))
 
 	return ps.toProductResponse(product), nil
 }
 
 func (ps *ProductService) ListProducts(ctx context.Context, page, pageSize int32) (*dto.ProductListResponse, error) {
+	ps.Logger.Debug("Getting product", xcomp.Field("page", page), xcomp.Field("page_size", pageSize))
 	if page < 1 {
 		page = 1
 	}
@@ -152,6 +183,11 @@ func (ps *ProductService) SearchProducts(ctx context.Context, searchReq *dto.Pro
 }
 
 func (ps *ProductService) CreateProduct(ctx context.Context, req *dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	ps.Logger.Info("Creating new product",
+		xcomp.Field("product_name", req.Name),
+		xcomp.Field("price", req.Price),
+		xcomp.Field("stock_quantity", req.StockQuantity))
+
 	product := &entities.Product{
 		Name:          req.Name,
 		Description:   req.Description,
@@ -162,13 +198,23 @@ func (ps *ProductService) CreateProduct(ctx context.Context, req *dto.CreateProd
 	}
 
 	if err := product.Validate(); err != nil {
+		ps.Logger.Error("Product validation failed",
+			xcomp.Field("product_name", req.Name),
+			xcomp.Field("error", err))
 		return nil, err
 	}
 
 	createdProduct, err := ps.ProductRepo.Create(ctx, product)
 	if err != nil {
+		ps.Logger.Error("Failed to create product",
+			xcomp.Field("product_name", req.Name),
+			xcomp.Field("error", err))
 		return nil, err
 	}
+
+	ps.Logger.Info("Product created successfully",
+		xcomp.Field("product_id", createdProduct.ID),
+		xcomp.Field("product_name", createdProduct.Name))
 
 	return ps.toProductResponse(createdProduct), nil
 }

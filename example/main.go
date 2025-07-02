@@ -21,21 +21,50 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/urfave/cli/v2"
+)
+
+var (
+	Version   = "1.0.0"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
 )
 
 func createInfrastructureModule(container *xcomp.Container) xcomp.Module {
 	return xcomp.NewModule().
 		AddFactory("ConfigService", func(container *xcomp.Container) any {
-			return xcomp.NewConfigService("config.yaml")
+			configFile := os.Getenv("CONFIG_FILE")
+			if configFile == "" {
+				configFile = "config.yaml"
+			}
+			return xcomp.NewConfigService(configFile)
+		}).
+		AddFactory("Logger", func(container *xcomp.Container) any {
+			configService, _ := container.Get("ConfigService").(*xcomp.ConfigService)
+			if configService != nil {
+				return xcomp.NewLogger(configService)
+			}
+			return xcomp.NewDevelopmentLogger()
 		}).
 		AddFactory("DatabaseConnection", func(container *xcomp.Container) any {
 			dbConn := &database.DatabaseConnection{}
 			if err := container.Inject(dbConn); err != nil {
-				log.Printf("Failed to inject DatabaseConnection: %v", err)
+				if logger, ok := container.Get("Logger").(xcomp.Logger); ok {
+					logger.Error("Failed to inject DatabaseConnection dependencies",
+						xcomp.Field("error", err))
+				}
 				return dbConn
 			}
 			if err := dbConn.Initialize(); err != nil {
-				log.Fatalf("Failed to initialize database connection: %v", err)
+				if logger, ok := container.Get("Logger").(xcomp.Logger); ok {
+					logger.Fatal("Failed to initialize database connection",
+						xcomp.Field("error", err))
+				} else {
+					log.Fatalf("Failed to initialize database connection: %v", err)
+				}
+			}
+			if logger, ok := container.Get("Logger").(xcomp.Logger); ok {
+				logger.Info("Database connection initialized successfully")
 			}
 			return dbConn
 		}).
@@ -91,52 +120,74 @@ func setupFiberApp(configService *xcomp.ConfigService) *fiber.App {
 			"status":    "healthy",
 			"timestamp": time.Now().Unix(),
 			"service":   "API Server",
+			"version":   Version,
 		})
 	})
 
 	return app
 }
 
-func main() {
-	log.Println("Starting API Server...")
-
+func serveCommand(c *cli.Context) error {
 	container := xcomp.NewContainer()
 
 	appModule := createAppModule(container)
 	if err := container.RegisterModule(appModule); err != nil {
-		log.Fatalf("Failed to register app module: %v", err)
-	}
-
-	log.Println("Registered Services:")
-	for _, serviceName := range container.ListServices() {
-		log.Printf("- %s", serviceName)
+		return fmt.Errorf("failed to register app module: %w", err)
 	}
 
 	configService, ok := container.Get("ConfigService").(*xcomp.ConfigService)
 	if !ok {
-		log.Fatal("Failed to get ConfigService")
+		return fmt.Errorf("failed to get ConfigService from container")
 	}
+
+	logger, ok := container.Get("Logger").(xcomp.Logger)
+	if !ok {
+		return fmt.Errorf("failed to get Logger from container")
+	}
+
+	logger.Info("Starting API Server",
+		xcomp.Field("version", Version),
+		xcomp.Field("build_time", BuildTime),
+		xcomp.Field("git_commit", GitCommit),
+		xcomp.Field("environment", configService.GetString("app.environment", "development")),
+		xcomp.Field("name", configService.GetString("app.name", "API Server")))
+
+	services := container.ListServices()
+	logger.Info("Dependency injection container initialized",
+		xcomp.Field("registered_services_count", len(services)),
+		xcomp.Field("services", services))
 
 	app := setupFiberApp(configService)
 
 	productRoutes, ok := container.Get("ProductRoutes").(*routes.ProductRoutes)
 	if !ok {
-		log.Fatal("Failed to get ProductRoutes")
+		logger.Fatal("Failed to get ProductRoutes from container")
+		return nil
 	}
 	productRoutes.SetupRoutes(app)
+	logger.Debug("Product routes registered")
 
 	orderRoutesInstance, ok := container.Get("OrderRoutes").(*orderRoutes.OrderRoutes)
 	if !ok {
-		log.Fatal("Failed to get OrderRoutes")
+		logger.Fatal("Failed to get OrderRoutes from container")
+		return nil
 	}
 	orderRoutesInstance.SetupRoutes(app)
+	logger.Debug("Order routes registered")
 
-	port := configService.GetInt("app.port", 3000)
+	port := c.Int("port")
+	if port == 0 {
+		port = configService.GetInt("app.port", 3000)
+	}
 
 	go func() {
-		log.Printf("Server starting on port %d", port)
+		logger.Info("HTTP server starting",
+			xcomp.Field("port", port),
+			xcomp.Field("address", fmt.Sprintf(":%d", port)))
 		if err := app.Listen(fmt.Sprintf(":%d", port)); err != nil {
-			log.Printf("Server failed to start: %v", err)
+			logger.Error("Server failed to start",
+				xcomp.Field("port", port),
+				xcomp.Field("error", err))
 		}
 	}()
 
@@ -144,20 +195,99 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutdown signal received, beginning graceful shutdown")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := app.ShutdownWithContext(ctx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+		logger.Error("Server forced to shutdown",
+			xcomp.Field("error", err),
+			xcomp.Field("timeout", "30s"))
+	} else {
+		logger.Info("HTTP server shutdown completed")
 	}
 
 	if dbConn, ok := container.Get("DatabaseConnection").(*database.DatabaseConnection); ok {
 		if err := dbConn.Close(); err != nil {
-			log.Printf("Failed to close database connection: %v", err)
+			logger.Error("Failed to close database connection",
+				xcomp.Field("error", err))
+		} else {
+			logger.Info("Database connection closed successfully")
 		}
 	}
 
-	log.Println("Server exited")
+	logger.Info("Application shutdown completed")
+	return nil
+}
+
+func main() {
+	app := &cli.App{
+		Name:    "API Server",
+		Usage:   "XComp-powered API server with dependency injection",
+		Version: Version,
+		Commands: []*cli.Command{
+			{
+				Name:    "serve",
+				Aliases: []string{"s", "start"},
+				Usage:   "Start the HTTP server",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "config",
+						Aliases: []string{"c"},
+						Usage:   "Configuration file path",
+						EnvVars: []string{"CONFIG_FILE"},
+						Value:   "config.yaml",
+					},
+					&cli.IntFlag{
+						Name:    "port",
+						Aliases: []string{"p"},
+						Usage:   "Port to listen on",
+						EnvVars: []string{"PORT"},
+						Value:   0, // 0 means use config file value
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if configFile := c.String("config"); configFile != "" {
+						os.Setenv("CONFIG_FILE", configFile)
+					}
+					return serveCommand(c)
+				},
+			},
+			{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "Show version information",
+				Action: func(c *cli.Context) error {
+					fmt.Printf("Version: %s\n", Version)
+					fmt.Printf("Build Time: %s\n", BuildTime)
+					fmt.Printf("Git Commit: %s\n", GitCommit)
+					return nil
+				},
+			},
+			{
+				Name:  "health",
+				Usage: "Check application health",
+				Action: func(c *cli.Context) error {
+					fmt.Println("✅ Application is healthy")
+					fmt.Printf("Version: %s\n", Version)
+					fmt.Printf("Build Time: %s\n", BuildTime)
+					return nil
+				},
+			},
+		},
+		DefaultCommand: "serve",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "verbose",
+				Aliases: []string{"V"},
+				Usage:   "Enable verbose logging",
+				EnvVars: []string{"VERBOSE"},
+			},
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }

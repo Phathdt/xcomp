@@ -1,4 +1,5 @@
--- Create orders table
+-- +goose Up
+-- Create orders and order_items tables
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL,
@@ -14,7 +15,6 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Create order_items table
 CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -28,13 +28,16 @@ CREATE TABLE IF NOT EXISTS order_items (
     CONSTRAINT order_items_total_price_positive CHECK (total_price >= 0)
 );
 
--- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
 
--- Add constraint to ensure valid order status
 ALTER TABLE orders ADD CONSTRAINT orders_status_check
 CHECK (status IN ('pending', 'confirmed', 'shipped', 'delivered', 'cancelled'));
+
+-- +goose Down
+-- Drop orders and order_items tables
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;

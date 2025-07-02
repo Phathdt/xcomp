@@ -1,0 +1,76 @@
+app:
+  name: 'XComp API Server'
+  version: '1.0.0'
+  environment: 'production'
+  debug: false
+  port: 3000
+
+database:
+  host: 'localhost'
+  port: 5432
+  username: 'postgres'
+  password: 'password'
+  database: 'example_db'
+  sslmode: 'disable'
+  max_connections: 50
+  max_idle_connections: 25
+  max_lifetime_minutes: 60
+
+logging:
+  # Production settings - info level with JSON format
+  level: 'info'
+  format: 'json'
+  development: false
+  disable_colors: true
+  # Output paths
+  output_paths: 'stdout'
+  error_output_paths: 'stderr'
+  # Encoder configuration for production
+  time_key: 'timestamp'
+  level_key: 'level'
+  message_key: 'message'
+  caller_key: 'caller'
+  stacktrace_key: 'stacktrace'
+  # Time format for production
+  time_format: 'iso8601'
+  # Level format without colors
+  level_format: 'lower'
+  # Minimal caller info for production
+  enable_caller: false
+  enable_stacktrace: false
+
+server:
+  port: 3000
+  host: '0.0.0.0'
+  timeout: 60s
+  read_timeout: 30s
+  write_timeout: 30s
+  prefork: false
+  cors:
+    enabled: true
+    allowed_origins:
+      - 'https://api.example.com'
+      - 'https://app.example.com'
+    allowed_methods:
+      - 'GET'
+      - 'POST'
+      - 'PUT'
+      - 'DELETE'
+      - 'OPTIONS'
+      - 'PATCH'
+    allowed_headers:
+      - 'Content-Type'
+      - 'Authorization'
+      - 'Accept'
+      - 'Origin'
+      - 'X-Requested-With'
+
+pagination:
+  default_page_size: 20
+  max_page_size: 100
+
+redis:
+  host: 'redis'
+  port: 6379
+  password: ''
+  db: 0
