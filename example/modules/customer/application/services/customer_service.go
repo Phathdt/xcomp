@@ -12,8 +12,21 @@ import (
 )
 
 type CustomerService struct {
-	CustomerRepository      interfaces.CustomerRepository      `inject:"CustomerRepository"`
-	CustomerCacheRepository interfaces.CustomerCacheRepository `inject:"CustomerCacheRepository"`
+	customerRepository      interfaces.CustomerRepository      // lowercase - manual injection
+	customerCacheRepository interfaces.CustomerCacheRepository // lowercase - manual injection
+}
+
+func NewCustomerService() *CustomerService {
+	return &CustomerService{}
+}
+
+// Method injection for lowercase fields
+func (cs *CustomerService) SetDependencies(
+	customerRepository interfaces.CustomerRepository,
+	customerCacheRepository interfaces.CustomerCacheRepository,
+) {
+	cs.customerRepository = customerRepository
+	cs.customerCacheRepository = customerCacheRepository
 }
 
 func (cs *CustomerService) GetServiceName() string {
@@ -30,30 +43,30 @@ func (cs *CustomerService) CreateCustomer(ctx context.Context, req *dto.CreateCu
 		return nil, err
 	}
 
-	existingCustomer, _ := cs.CustomerRepository.GetByUsername(ctx, req.Username)
+	existingCustomer, _ := cs.customerRepository.GetByUsername(ctx, req.Username)
 	if existingCustomer != nil {
 		return nil, entities.ErrCustomerUsernameExists
 	}
 
-	existingCustomer, _ = cs.CustomerRepository.GetByEmail(ctx, req.Email)
+	existingCustomer, _ = cs.customerRepository.GetByEmail(ctx, req.Email)
 	if existingCustomer != nil {
 		return nil, entities.ErrCustomerEmailExists
 	}
 
-	createdCustomer, err := cs.CustomerRepository.Create(ctx, customer)
+	createdCustomer, err := cs.customerRepository.Create(ctx, customer)
 	if err != nil {
 		return nil, err
 	}
 
-	cs.CustomerCacheRepository.Set(ctx, cs.CustomerCacheRepository.GetCustomerCacheKey(createdCustomer.ID), createdCustomer, 30*time.Minute)
-	cs.CustomerCacheRepository.Set(ctx, cs.CustomerCacheRepository.GetCustomerUsernameCacheKey(createdCustomer.Username), createdCustomer, 30*time.Minute)
-	cs.CustomerCacheRepository.Set(ctx, cs.CustomerCacheRepository.GetCustomerEmailCacheKey(createdCustomer.Email), createdCustomer, 30*time.Minute)
+	cs.customerCacheRepository.Set(ctx, cs.customerCacheRepository.GetCustomerCacheKey(createdCustomer.ID), createdCustomer, 30*time.Minute)
+	cs.customerCacheRepository.Set(ctx, cs.customerCacheRepository.GetCustomerUsernameCacheKey(createdCustomer.Username), createdCustomer, 30*time.Minute)
+	cs.customerCacheRepository.Set(ctx, cs.customerCacheRepository.GetCustomerEmailCacheKey(createdCustomer.Email), createdCustomer, 30*time.Minute)
 
 	return cs.mapToCustomerResponse(createdCustomer), nil
 }
 
 func (cs *CustomerService) UpdateCustomer(ctx context.Context, id uuid.UUID, req *dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
-	existingCustomer, err := cs.CustomerRepository.GetByID(ctx, id)
+	existingCustomer, err := cs.customerRepository.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +75,14 @@ func (cs *CustomerService) UpdateCustomer(ctx context.Context, id uuid.UUID, req
 	}
 
 	if req.Username != existingCustomer.Username {
-		usernameTaken, _ := cs.CustomerRepository.GetByUsername(ctx, req.Username)
+		usernameTaken, _ := cs.customerRepository.GetByUsername(ctx, req.Username)
 		if usernameTaken != nil {
 			return nil, entities.ErrCustomerUsernameExists
 		}
 	}
 
 	if req.Email != existingCustomer.Email {
-		emailTaken, _ := cs.CustomerRepository.GetByEmail(ctx, req.Email)
+		emailTaken, _ := cs.customerRepository.GetByEmail(ctx, req.Email)
 		if emailTaken != nil {
 			return nil, entities.ErrCustomerEmailExists
 		}
@@ -82,20 +95,20 @@ func (cs *CustomerService) UpdateCustomer(ctx context.Context, id uuid.UUID, req
 		return nil, err
 	}
 
-	updatedCustomer, err := cs.CustomerRepository.Update(ctx, existingCustomer)
+	updatedCustomer, err := cs.customerRepository.Update(ctx, existingCustomer)
 	if err != nil {
 		return nil, err
 	}
 
-	cs.CustomerCacheRepository.Delete(ctx, cs.CustomerCacheRepository.GetCustomerCacheKey(updatedCustomer.ID))
-	cs.CustomerCacheRepository.Delete(ctx, cs.CustomerCacheRepository.GetCustomerUsernameCacheKey(updatedCustomer.Username))
-	cs.CustomerCacheRepository.Delete(ctx, cs.CustomerCacheRepository.GetCustomerEmailCacheKey(updatedCustomer.Email))
+	cs.customerCacheRepository.Delete(ctx, cs.customerCacheRepository.GetCustomerCacheKey(updatedCustomer.ID))
+	cs.customerCacheRepository.Delete(ctx, cs.customerCacheRepository.GetCustomerUsernameCacheKey(updatedCustomer.Username))
+	cs.customerCacheRepository.Delete(ctx, cs.customerCacheRepository.GetCustomerEmailCacheKey(updatedCustomer.Email))
 
 	return cs.mapToCustomerResponse(updatedCustomer), nil
 }
 
 func (cs *CustomerService) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
-	existingCustomer, err := cs.CustomerRepository.GetByID(ctx, id)
+	existingCustomer, err := cs.customerRepository.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -103,24 +116,24 @@ func (cs *CustomerService) DeleteCustomer(ctx context.Context, id uuid.UUID) err
 		return entities.ErrCustomerNotFound
 	}
 
-	if err := cs.CustomerRepository.Delete(ctx, id); err != nil {
+	if err := cs.customerRepository.Delete(ctx, id); err != nil {
 		return err
 	}
 
-	cs.CustomerCacheRepository.Delete(ctx, cs.CustomerCacheRepository.GetCustomerCacheKey(id))
-	cs.CustomerCacheRepository.Delete(ctx, cs.CustomerCacheRepository.GetCustomerUsernameCacheKey(existingCustomer.Username))
-	cs.CustomerCacheRepository.Delete(ctx, cs.CustomerCacheRepository.GetCustomerEmailCacheKey(existingCustomer.Email))
+	cs.customerCacheRepository.Delete(ctx, cs.customerCacheRepository.GetCustomerCacheKey(id))
+	cs.customerCacheRepository.Delete(ctx, cs.customerCacheRepository.GetCustomerUsernameCacheKey(existingCustomer.Username))
+	cs.customerCacheRepository.Delete(ctx, cs.customerCacheRepository.GetCustomerEmailCacheKey(existingCustomer.Email))
 
 	return nil
 }
 
 func (cs *CustomerService) GetCustomer(ctx context.Context, id uuid.UUID) (*dto.CustomerResponse, error) {
-	cacheKey := cs.CustomerCacheRepository.GetCustomerCacheKey(id)
-	if cachedCustomer, _ := cs.CustomerCacheRepository.Get(ctx, cacheKey); cachedCustomer != nil {
+	cacheKey := cs.customerCacheRepository.GetCustomerCacheKey(id)
+	if cachedCustomer, _ := cs.customerCacheRepository.Get(ctx, cacheKey); cachedCustomer != nil {
 		return cs.mapToCustomerResponse(cachedCustomer), nil
 	}
 
-	customer, err := cs.CustomerRepository.GetByID(ctx, id)
+	customer, err := cs.customerRepository.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -128,18 +141,18 @@ func (cs *CustomerService) GetCustomer(ctx context.Context, id uuid.UUID) (*dto.
 		return nil, entities.ErrCustomerNotFound
 	}
 
-	cs.CustomerCacheRepository.Set(ctx, cacheKey, customer, 30*time.Minute)
+	cs.customerCacheRepository.Set(ctx, cacheKey, customer, 30*time.Minute)
 
 	return cs.mapToCustomerResponse(customer), nil
 }
 
 func (cs *CustomerService) GetCustomerByUsername(ctx context.Context, username string) (*dto.CustomerResponse, error) {
-	cacheKey := cs.CustomerCacheRepository.GetCustomerUsernameCacheKey(username)
-	if cachedCustomer, _ := cs.CustomerCacheRepository.Get(ctx, cacheKey); cachedCustomer != nil {
+	cacheKey := cs.customerCacheRepository.GetCustomerUsernameCacheKey(username)
+	if cachedCustomer, _ := cs.customerCacheRepository.Get(ctx, cacheKey); cachedCustomer != nil {
 		return cs.mapToCustomerResponse(cachedCustomer), nil
 	}
 
-	customer, err := cs.CustomerRepository.GetByUsername(ctx, username)
+	customer, err := cs.customerRepository.GetByUsername(ctx, username)
 	if err != nil {
 		return nil, err
 	}
@@ -147,18 +160,18 @@ func (cs *CustomerService) GetCustomerByUsername(ctx context.Context, username s
 		return nil, entities.ErrCustomerNotFound
 	}
 
-	cs.CustomerCacheRepository.Set(ctx, cacheKey, customer, 30*time.Minute)
+	cs.customerCacheRepository.Set(ctx, cacheKey, customer, 30*time.Minute)
 
 	return cs.mapToCustomerResponse(customer), nil
 }
 
 func (cs *CustomerService) GetCustomerByEmail(ctx context.Context, email string) (*dto.CustomerResponse, error) {
-	cacheKey := cs.CustomerCacheRepository.GetCustomerEmailCacheKey(email)
-	if cachedCustomer, _ := cs.CustomerCacheRepository.Get(ctx, cacheKey); cachedCustomer != nil {
+	cacheKey := cs.customerCacheRepository.GetCustomerEmailCacheKey(email)
+	if cachedCustomer, _ := cs.customerCacheRepository.Get(ctx, cacheKey); cachedCustomer != nil {
 		return cs.mapToCustomerResponse(cachedCustomer), nil
 	}
 
-	customer, err := cs.CustomerRepository.GetByEmail(ctx, email)
+	customer, err := cs.customerRepository.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +179,7 @@ func (cs *CustomerService) GetCustomerByEmail(ctx context.Context, email string)
 		return nil, entities.ErrCustomerNotFound
 	}
 
-	cs.CustomerCacheRepository.Set(ctx, cacheKey, customer, 30*time.Minute)
+	cs.customerCacheRepository.Set(ctx, cacheKey, customer, 30*time.Minute)
 
 	return cs.mapToCustomerResponse(customer), nil
 }
@@ -180,12 +193,12 @@ func (cs *CustomerService) ListCustomers(ctx context.Context, page, pageSize int
 	}
 
 	offset := (page - 1) * pageSize
-	customers, err := cs.CustomerRepository.List(ctx, pageSize, offset)
+	customers, err := cs.customerRepository.List(ctx, pageSize, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	totalCount, err := cs.CustomerRepository.Count(ctx)
+	totalCount, err := cs.customerRepository.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +228,7 @@ func (cs *CustomerService) SearchCustomers(ctx context.Context, req *dto.Custome
 	}
 
 	offset := (req.Page - 1) * req.PageSize
-	customers, err := cs.CustomerRepository.Search(ctx, req.Query, req.PageSize, offset)
+	customers, err := cs.customerRepository.Search(ctx, req.Query, req.PageSize, offset)
 	if err != nil {
 		return nil, err
 	}

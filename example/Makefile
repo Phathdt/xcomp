@@ -6,7 +6,15 @@ BUILD_DIR=build
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
+
+# Standard ldflags with version info
+LDFLAGS_VERSION=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
+
+# Optimized ldflags - strip symbols and debug info
+LDFLAGS_OPTIMIZED=-ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
+
+# Ultra optimized - additional flags
+LDFLAGS_ULTRA=-ldflags "-s -w -extldflags=-static -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
 
 # Go parameters
 GOCMD=go
@@ -31,7 +39,9 @@ help: ## Show this help message
 	@echo "  make run-dev                # Development mode (colored, debug)"
 	@echo "  make run-prod               # Production mode (JSON, info)"
 	@echo "  make dev                    # Hot reload development"
-	@echo "  make build                  # Build the binary"
+	@echo "  make build                  # Build standard binary (41MB)"
+	@echo "  make build-optimized        # Build optimized binary (30MB - 27% smaller)"
+	@echo "  make build-upx              # Build UPX compressed binary (6MB - 85% smaller)"
 	@echo "  make docker-up              # Start all services"
 
 ## Build targets
@@ -39,19 +49,60 @@ help: ## Show this help message
 build: ## Build the binary
 	@echo "🔨 Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
+	$(GOBUILD) $(LDFLAGS_VERSION) -o $(BUILD_DIR)/$(BINARY_NAME) .
 	@echo "✅ Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+
+.PHONY: build-optimized
+build-optimized: ## Build optimized binary (stripped symbols, ~30% smaller)
+	@echo "🔨 Building optimized $(BINARY_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS_OPTIMIZED) -trimpath -o $(BUILD_DIR)/$(BINARY_NAME)-optimized .
+	@echo "✅ Optimized build complete: $(BUILD_DIR)/$(BINARY_NAME)-optimized"
+	@if [ -f "$(BUILD_DIR)/$(BINARY_NAME)" ]; then \
+		echo "📊 Size comparison:"; \
+		echo "  Standard: $$(ls -lh $(BUILD_DIR)/$(BINARY_NAME) | awk '{print $$5}')"; \
+		echo "  Optimized: $$(ls -lh $(BUILD_DIR)/$(BINARY_NAME)-optimized | awk '{print $$5}')"; \
+	fi
+
+.PHONY: build-ultra
+build-ultra: ## Build ultra-optimized binary (static linking, ~40% smaller)
+	@echo "🔨 Building ultra-optimized $(BINARY_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 GOOS=linux $(GOBUILD) $(LDFLAGS_ULTRA) -trimpath -a -installsuffix cgo -o $(BUILD_DIR)/$(BINARY_NAME)-ultra .
+	@echo "✅ Ultra-optimized build complete: $(BUILD_DIR)/$(BINARY_NAME)-ultra"
+
+.PHONY: build-upx
+build-upx: build-ultra ## Build UPX compressed Linux binary (~85% smaller)
+	@echo "🗜️ Compressing Linux binary with UPX..."
+	@if command -v upx > /dev/null 2>&1; then \
+		upx --lzma --best $(BUILD_DIR)/$(BINARY_NAME)-ultra -o $(BUILD_DIR)/$(BINARY_NAME)-upx-linux; \
+		echo "✅ UPX compressed build complete: $(BUILD_DIR)/$(BINARY_NAME)-upx-linux"; \
+		echo "📊 Size comparison:"; \
+		echo "  Standard (macOS): $$(ls -lh $(BUILD_DIR)/$(BINARY_NAME) | awk '{print $$5}')"; \
+		echo "  Optimized (macOS): $$(ls -lh $(BUILD_DIR)/$(BINARY_NAME)-optimized | awk '{print $$5}')"; \
+		echo "  Ultra (Linux): $$(ls -lh $(BUILD_DIR)/$(BINARY_NAME)-ultra | awk '{print $$5}')"; \
+		echo "  UPX (Linux): $$(ls -lh $(BUILD_DIR)/$(BINARY_NAME)-upx-linux | awk '{print $$5}')"; \
+		echo "  💡 Note: UPX works best with Linux binaries"; \
+	else \
+		echo "❌ UPX not found. Install with: brew install upx (macOS) or apt install upx (Ubuntu)"; \
+	fi
+
+.PHONY: build-all
+build-all: build build-optimized build-ultra build-upx ## Build all variants
+	@echo "🎉 All build variants complete!"
+	@echo "📁 Available in $(BUILD_DIR)/:"
+	@ls -lh $(BUILD_DIR)/
 
 ## Run targets
 .PHONY: run
 run: ## Run the application with default settings
 	@echo "🚀 Starting API Server (default config)..."
-	$(GORUN) $(LDFLAGS) . serve
+	$(GORUN) $(LDFLAGS_VERSION) . serve
 
 .PHONY: run-dev
 run-dev: ## Run in development mode (colored console, debug)
 	@echo "🚀 Starting API Server [DEVELOPMENT MODE]..."
-	CONFIG_FILE=config-dev.yaml $(GORUN) $(LDFLAGS) . serve
+	CONFIG_FILE=config-dev.yaml $(GORUN) $(LDFLAGS_VERSION) . serve
 
 .PHONY: run-prod
 run-prod: build ## Run in production mode (JSON logs, info level)
@@ -279,11 +330,11 @@ format: ## Format code
 ## Informational targets
 .PHONY: version
 version: ## Show version information
-	@$(GORUN) $(LDFLAGS) . version
+	@$(GORUN) $(LDFLAGS_VERSION) . version
 
 .PHONY: health
 health: ## Check application health
-	@$(GORUN) $(LDFLAGS) . health
+	@$(GORUN) $(LDFLAGS_VERSION) . health
 
 .PHONY: info
 info: ## Show build information
@@ -311,10 +362,26 @@ dev-reset: clean docker-clean deps db-setup ## Reset development environment
 
 ## Production deployment
 .PHONY: deploy-check
-deploy-check: test lint build ## Check if ready for deployment
+deploy-check: test lint build-optimized ## Check if ready for deployment (with optimized build)
 	@echo "✅ Deployment checks passed!"
 
 .PHONY: release
-release: clean test lint build-all ## Prepare release build
+release: clean test lint build-all ## Prepare all release builds (standard, optimized, ultra, UPX)
 	@echo "🎉 Release build complete!"
 	@echo "  Binaries available in $(BUILD_DIR)/"
+	@echo ""
+	@echo "📊 Build size comparison:"
+	@ls -lh $(BUILD_DIR)/ | grep api-server
+
+.PHONY: install-upx
+install-upx: ## Install UPX compressor
+	@echo "📥 Installing UPX..."
+	@if command -v brew > /dev/null 2>&1; then \
+		brew install upx; \
+	elif command -v apt > /dev/null 2>&1; then \
+		sudo apt update && sudo apt install -y upx; \
+	elif command -v yum > /dev/null 2>&1; then \
+		sudo yum install -y upx; \
+	else \
+		echo "❌ Package manager not found. Please install UPX manually from https://upx.github.io/"; \
+	fi

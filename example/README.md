@@ -81,6 +81,36 @@ go run . health
 - `make dev` - **Hot reload** development with Air
 - `make dev-setup` - **Complete setup** (dependencies + Docker + migrations)
 
+### 📦 Build Optimization Targets
+- `make build` - **Standard build** (41MB) - includes debug symbols
+- `make build-optimized` - **Optimized build** (30MB) - stripped symbols, CGO disabled
+- `make build-ultra` - **Ultra-optimized** (29MB) - static linking, Linux target
+- `make build-upx` - **UPX compressed** (6MB) - Linux binary with compression
+- `make build-all` - **All variants** - builds all optimization levels
+- `make install-upx` - **Install UPX** compressor tool
+
+### 📊 Size Optimization Results
+
+| Build Type | Size | Reduction | Techniques Used | Best For |
+|------------|------|-----------|----------------|----------|
+| **Standard** | 41MB | - | Version info only | Development, debugging |
+| **Optimized** | 30MB | **27%** | `-s -w`, `CGO_ENABLED=0`, `-trimpath` | Production macOS/general |
+| **Ultra** | 29MB | **29%** | Static linking, Linux cross-compile | Docker containers |
+| **UPX Linux** | 6MB | **85%** | Binary compression + optimization | Resource-constrained servers |
+
+#### ⚡ **Recommended Usage:**
+- **Development**: `make build` (full debug info)
+- **Production macOS**: `make build-optimized` (30MB, fast startup)
+- **Docker/Cloud**: `make build-upx` (6MB, minimal resources)
+
+#### Optimization Flags Explained:
+- `-s` - Strip symbol table and debug info
+- `-w` - Strip DWARF debug info
+- `CGO_ENABLED=0` - Disable CGO for static binary
+- `-trimpath` - Remove absolute paths from binary
+- `-extldflags=-static` - Static linking (Linux)
+- `upx --lzma --best` - Maximum LZMA compression
+
 ### 🗄️ Database & Migrations (Goose)
 - `make db-setup` - Setup database with Docker and run migrations
 - `make db-reset` - Reset and setup database from scratch
@@ -94,7 +124,6 @@ go run . health
 - `make migrate-validate` - Validate all migrations
 
 ### 🔨 Building & Testing
-- `make build` - Build the binary with version info
 - `make test` - Run all tests
 - `make test-coverage` - Run tests with coverage report
 - `make benchmark` - Run performance benchmarks

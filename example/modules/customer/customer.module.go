@@ -2,6 +2,7 @@ package customer
 
 import (
 	"example/modules/customer/application/services"
+	"example/modules/customer/domain/interfaces"
 	"example/modules/customer/infrastructure/repositories"
 	"xcomp"
 )
@@ -9,8 +10,14 @@ import (
 func CreateCustomerModule() xcomp.Module {
 	return xcomp.NewModule().
 		AddFactory("CustomerService", func(c *xcomp.Container) any {
-			service := &services.CustomerService{}
-			c.Inject(service)
+			service := services.NewCustomerService()
+
+			// Manual inject lowercase fields via method
+			customerRepo := c.Get("CustomerRepository").(interfaces.CustomerRepository)
+			customerCacheRepo := c.Get("CustomerCacheRepository").(interfaces.CustomerCacheRepository)
+
+			service.SetDependencies(customerRepo, customerCacheRepo)
+
 			return service
 		}).
 		AddFactory("CustomerRepository", func(c *xcomp.Container) any {

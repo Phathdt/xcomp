@@ -15,9 +15,22 @@ import (
 )
 
 type ProductService struct {
-	ProductRepo      interfaces.ProductRepository      `inject:"ProductRepository"`
-	ProductCacheRepo interfaces.ProductCacheRepository `inject:"ProductCacheRepository"`
-	Logger           xcomp.Logger                      `inject:"Logger"`
+	productRepo      interfaces.ProductRepository      // lowercase - manual injection
+	productCacheRepo interfaces.ProductCacheRepository // lowercase - manual injection
+	Logger           xcomp.Logger                      `inject:"Logger"` // uppercase - auto injection
+}
+
+func NewProductService() *ProductService {
+	return &ProductService{}
+}
+
+// Method injection for lowercase fields
+func (ps *ProductService) SetDependencies(
+	productRepo interfaces.ProductRepository,
+	productCacheRepo interfaces.ProductCacheRepository,
+) {
+	ps.productRepo = productRepo
+	ps.productCacheRepo = productCacheRepo
 }
 
 func (ps *ProductService) GetServiceName() string {
@@ -27,13 +40,13 @@ func (ps *ProductService) GetServiceName() string {
 func (ps *ProductService) GetProduct(ctx context.Context, id uuid.UUID) (*dto.ProductResponse, error) {
 	ps.Logger.Debug("Getting product", xcomp.Field("product_id", id))
 
-	product, err := ps.ProductCacheRepo.Get(ctx, id)
+	product, err := ps.productCacheRepo.Get(ctx, id)
 	if err != nil {
 		ps.Logger.Debug("Product not found in cache, fetching from database",
 			xcomp.Field("product_id", id),
 			xcomp.Field("cache_error", err))
 
-		product, err = ps.ProductRepo.GetByID(ctx, id)
+		product, err = ps.productRepo.GetByID(ctx, id)
 		if err != nil {
 			ps.Logger.Error("Failed to get product from database",
 				xcomp.Field("product_id", id),
@@ -41,7 +54,7 @@ func (ps *ProductService) GetProduct(ctx context.Context, id uuid.UUID) (*dto.Pr
 			return nil, err
 		}
 
-		if setErr := ps.ProductCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
+		if setErr := ps.productCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
 			ps.Logger.Warn("Failed to cache product",
 				xcomp.Field("product_id", id),
 				xcomp.Field("error", setErr))
@@ -50,7 +63,7 @@ func (ps *ProductService) GetProduct(ctx context.Context, id uuid.UUID) (*dto.Pr
 		ps.Logger.Debug("Product cache miss, fetching from database",
 			xcomp.Field("product_id", id))
 
-		product, err = ps.ProductRepo.GetByID(ctx, id)
+		product, err = ps.productRepo.GetByID(ctx, id)
 		if err != nil {
 			ps.Logger.Error("Failed to get product from database",
 				xcomp.Field("product_id", id),
@@ -58,7 +71,7 @@ func (ps *ProductService) GetProduct(ctx context.Context, id uuid.UUID) (*dto.Pr
 			return nil, err
 		}
 
-		if setErr := ps.ProductCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
+		if setErr := ps.productCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
 			ps.Logger.Warn("Failed to cache product",
 				xcomp.Field("product_id", id),
 				xcomp.Field("error", setErr))
@@ -85,12 +98,12 @@ func (ps *ProductService) ListProducts(ctx context.Context, page, pageSize int32
 
 	offset := (page - 1) * pageSize
 
-	products, err := ps.ProductRepo.List(ctx, pageSize, offset)
+	products, err := ps.productRepo.List(ctx, pageSize, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	totalCount, err := ps.ProductRepo.Count(ctx)
+	totalCount, err := ps.productRepo.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -122,12 +135,12 @@ func (ps *ProductService) ListProductsByCategory(ctx context.Context, category s
 
 	offset := (page - 1) * pageSize
 
-	products, err := ps.ProductRepo.ListByCategory(ctx, category, pageSize, offset)
+	products, err := ps.productRepo.ListByCategory(ctx, category, pageSize, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	totalCount, err := ps.ProductRepo.CountByCategory(ctx, category)
+	totalCount, err := ps.productRepo.CountByCategory(ctx, category)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +172,7 @@ func (ps *ProductService) SearchProducts(ctx context.Context, searchReq *dto.Pro
 
 	offset := (searchReq.Page - 1) * searchReq.PageSize
 
-	products, err := ps.ProductRepo.Search(ctx, searchReq.Query, searchReq.PageSize, offset)
+	products, err := ps.productRepo.Search(ctx, searchReq.Query, searchReq.PageSize, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +217,7 @@ func (ps *ProductService) CreateProduct(ctx context.Context, req *dto.CreateProd
 		return nil, err
 	}
 
-	createdProduct, err := ps.ProductRepo.Create(ctx, product)
+	createdProduct, err := ps.productRepo.Create(ctx, product)
 	if err != nil {
 		ps.Logger.Error("Failed to create product",
 			xcomp.Field("product_name", req.Name),
@@ -220,7 +233,7 @@ func (ps *ProductService) CreateProduct(ctx context.Context, req *dto.CreateProd
 }
 
 func (ps *ProductService) UpdateProduct(ctx context.Context, id uuid.UUID, req *dto.UpdateProductRequest) (*dto.ProductResponse, error) {
-	existingProduct, err := ps.ProductRepo.GetByID(ctx, id)
+	existingProduct, err := ps.productRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -235,34 +248,34 @@ func (ps *ProductService) UpdateProduct(ctx context.Context, id uuid.UUID, req *
 		return nil, err
 	}
 
-	updatedProduct, err := ps.ProductRepo.Update(ctx, existingProduct)
+	updatedProduct, err := ps.productRepo.Update(ctx, existingProduct)
 	if err != nil {
 		return nil, err
 	}
 
-	ps.ProductCacheRepo.Delete(ctx, id)
+	ps.productCacheRepo.Delete(ctx, id)
 
 	return ps.toProductResponse(updatedProduct), nil
 }
 
 func (ps *ProductService) UpdateProductStock(ctx context.Context, id uuid.UUID, req *dto.UpdateStockRequest) (*dto.ProductResponse, error) {
-	updatedProduct, err := ps.ProductRepo.UpdateStock(ctx, id, req.StockQuantity)
+	updatedProduct, err := ps.productRepo.UpdateStock(ctx, id, req.StockQuantity)
 	if err != nil {
 		return nil, err
 	}
 
-	ps.ProductCacheRepo.Delete(ctx, id)
+	ps.productCacheRepo.Delete(ctx, id)
 
 	return ps.toProductResponse(updatedProduct), nil
 }
 
 func (ps *ProductService) DeleteProduct(ctx context.Context, id uuid.UUID) error {
-	err := ps.ProductRepo.Delete(ctx, id)
+	err := ps.productRepo.Delete(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	ps.ProductCacheRepo.Delete(ctx, id)
+	ps.productCacheRepo.Delete(ctx, id)
 	return nil
 }
 
