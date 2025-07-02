@@ -42,6 +42,7 @@ help: ## Show this help message
 	@echo "  make build                  # Build standard binary (41MB)"
 	@echo "  make build-optimized        # Build optimized binary (30MB - 27% smaller)"
 	@echo "  make build-upx              # Build UPX compressed binary (6MB - 85% smaller)"
+	@echo "  make docker-build           # Build Docker image with distroless (~15MB)"
 	@echo "  make docker-up              # Start all services"
 
 ## Build targets
@@ -128,7 +129,7 @@ install-tools: ## Install development tools
 
 ## Docker targets
 .PHONY: docker-up
-docker-up: ## Start all services with Docker Compose
+docker-up: ## Start PostgreSQL + Redis services
 	@echo "🐳 Starting Docker services..."
 	docker-compose up -d --wait
 	@echo "✅ Docker services started!"
@@ -154,6 +155,21 @@ docker-clean: ## Clean Docker resources
 	docker-compose down -v --remove-orphans
 	docker system prune -f
 	@echo "✅ Docker cleanup complete!"
+
+## Docker Image Build Targets
+.PHONY: docker-build
+docker-build: ## Build Docker image with distroless base (smallest)
+	@echo "🐳 Building Docker image with distroless base..."
+	cd .. && docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		-f example/Dockerfile \
+		-t xcomp-api:$(VERSION) \
+		-t xcomp-api:latest .
+	@echo "✅ Docker image built: xcomp-api:$(VERSION)"
+	@echo "📊 Image size:"
+	@docker images xcomp-api:latest --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}"
 
 ## Database targets
 .PHONY: db-setup
