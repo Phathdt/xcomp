@@ -7,7 +7,7 @@ import (
 
 	"example/infrastructure/database"
 	"example/modules/product/domain/entities"
-	"example/modules/product/domain/repositories"
+	"example/modules/product/domain/interfaces"
 	"example/modules/product/infrastructure/persistence/queries"
 
 	"github.com/google/uuid"
@@ -310,4 +310,4 @@ func (pr *ProductRepositoryImpl) convertError(err error) error {
 	return fmt.Errorf("database error: %w", err)
 }
 
-var _ repositories.ProductRepository = (*ProductRepositoryImpl)(nil)
+var _ interfaces.ProductRepository = (*ProductRepositoryImpl)(nil)

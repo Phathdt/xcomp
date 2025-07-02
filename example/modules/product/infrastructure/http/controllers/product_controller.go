@@ -4,15 +4,15 @@ import (
 	"strconv"
 
 	"example/modules/product/application/dto"
-	"example/modules/product/application/services"
 	"example/modules/product/domain/entities"
+	"example/modules/product/domain/interfaces"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
 type ProductController struct {
-	ProductService *services.ProductService `inject:"ProductService"`
+	ProductService interfaces.ProductService `inject:"ProductService"`
 }
 
 func (pc *ProductController) GetServiceName() string {

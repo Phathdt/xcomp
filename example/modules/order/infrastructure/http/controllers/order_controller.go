@@ -4,15 +4,15 @@ import (
 	"strconv"
 
 	"example/modules/order/application/dto"
-	"example/modules/order/application/services"
 	"example/modules/order/domain/entities"
+	"example/modules/order/domain/interfaces"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
 type OrderController struct {
-	orderService *services.OrderService `inject:"OrderService"`
+	orderService interfaces.OrderService `inject:"OrderService"`
 }
 
 func NewOrderController() *OrderController {

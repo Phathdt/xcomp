@@ -3,17 +3,19 @@ package services
 import (
 	"context"
 	"log"
+	"time"
 
 	"example/modules/order/application/dto"
 	"example/modules/order/domain/entities"
-	"example/modules/order/domain/repositories"
+	"example/modules/order/domain/interfaces"
 
 	"github.com/google/uuid"
 )
 
 type OrderService struct {
-	orderRepo     repositories.OrderRepository     `inject:"OrderRepository"`
-	orderItemRepo repositories.OrderItemRepository `inject:"OrderItemRepository"`
+	orderRepo      interfaces.OrderRepository      `inject:"OrderRepository"`
+	orderItemRepo  interfaces.OrderItemRepository  `inject:"OrderItemRepository"`
+	orderCacheRepo interfaces.OrderCacheRepository `inject:"OrderCacheRepository"`
 }
 
 func NewOrderService() *OrderService {
@@ -58,17 +60,38 @@ func (s *OrderService) CreateOrder(ctx context.Context, req dto.CreateOrderReque
 func (s *OrderService) GetOrderByID(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Getting order by ID %s", id)
 
-	order, err := s.orderRepo.GetByID(ctx, id)
+	order, err := s.orderCacheRepo.Get(ctx, id)
 	if err != nil {
-		return nil, err
-	}
+		order, err = s.orderRepo.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
+		items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		order.OrderItems = items
 
-	order.OrderItems = items
+		if setErr := s.orderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
+			log.Printf("Failed to cache order: %v", setErr)
+		}
+	} else if order == nil {
+		order, err = s.orderRepo.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		order.OrderItems = items
+
+		if setErr := s.orderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
+			log.Printf("Failed to cache order: %v", setErr)
+		}
+	}
 
 	response := dto.ToOrderResponse(order)
 	return &response, nil

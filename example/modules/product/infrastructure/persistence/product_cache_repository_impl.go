@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"example/modules/product/domain/entities"
-	"example/modules/product/domain/repositories"
+	"example/modules/product/domain/interfaces"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -73,8 +73,29 @@ func (r *ProductCacheRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
+func (r *ProductCacheRepositoryImpl) Clear(ctx context.Context) error {
+	iter := r.RedisClient.Scan(ctx, 0, "product:*", 0).Iterator()
+	var keysToDelete []string
+
+	for iter.Next(ctx) {
+		keysToDelete = append(keysToDelete, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("failed to scan cache keys: %w", err)
+	}
+
+	if len(keysToDelete) > 0 {
+		if err := r.RedisClient.Del(ctx, keysToDelete...).Err(); err != nil {
+			return fmt.Errorf("failed to clear cache: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (r *ProductCacheRepositoryImpl) getProductKey(id uuid.UUID) string {
 	return fmt.Sprintf("product:%s", id.String())
 }
 
-var _ repositories.ProductCacheRepository = (*ProductCacheRepositoryImpl)(nil)
+var _ interfaces.ProductCacheRepository = (*ProductCacheRepositoryImpl)(nil)

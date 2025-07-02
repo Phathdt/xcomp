@@ -7,14 +7,14 @@ import (
 
 	"example/modules/product/application/dto"
 	"example/modules/product/domain/entities"
-	"example/modules/product/domain/repositories"
+	"example/modules/product/domain/interfaces"
 
 	"github.com/google/uuid"
 )
 
 type ProductService struct {
-	ProductRepo      repositories.ProductRepository      `inject:"ProductRepository"`
-	ProductCacheRepo repositories.ProductCacheRepository `inject:"ProductCacheRepository"`
+	ProductRepo      interfaces.ProductRepository      `inject:"ProductRepository"`
+	ProductCacheRepo interfaces.ProductCacheRepository `inject:"ProductCacheRepository"`
 }
 
 func (ps *ProductService) GetServiceName() string {

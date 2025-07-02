@@ -11,19 +11,34 @@ import (
 func NewOrderModule() xcomp.Module {
 	return xcomp.NewModule().
 		AddFactory("OrderService", func(c *xcomp.Container) any {
-			return services.NewOrderService()
+			service := &services.OrderService{}
+			c.Inject(service)
+			return service
 		}).
 		AddFactory("OrderRepository", func(c *xcomp.Container) any {
-			return persistence.NewOrderRepository()
+			repo := &persistence.OrderRepositoryImpl{}
+			c.Inject(repo)
+			return repo
 		}).
 		AddFactory("OrderItemRepository", func(c *xcomp.Container) any {
-			return persistence.NewOrderItemRepository()
+			repo := &persistence.OrderItemRepositoryImpl{}
+			c.Inject(repo)
+			return repo
+		}).
+		AddFactory("OrderCacheRepository", func(c *xcomp.Container) any {
+			cacheRepo := &persistence.OrderCacheRepositoryImpl{}
+			c.Inject(cacheRepo)
+			return cacheRepo
 		}).
 		AddFactory("OrderController", func(c *xcomp.Container) any {
-			return controllers.NewOrderController()
+			controller := &controllers.OrderController{}
+			c.Inject(controller)
+			return controller
 		}).
 		AddFactory("OrderRoutes", func(c *xcomp.Container) any {
-			return routes.NewOrderRoutes()
+			routes := &routes.OrderRoutes{}
+			c.Inject(routes)
+			return routes
 		}).
 		Build()
 }

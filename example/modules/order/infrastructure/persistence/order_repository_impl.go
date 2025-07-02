@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"example/modules/order/domain/entities"
-	"example/modules/order/domain/repositories"
 	"example/modules/order/infrastructure/persistence/queries"
 
 	"github.com/google/uuid"
@@ -24,12 +23,12 @@ type OrderItemRepositoryImpl struct {
 	q  *queries.Queries
 }
 
-func NewOrderRepository() repositories.OrderRepository {
-	return &OrderRepositoryImpl{}
+func (r *OrderRepositoryImpl) GetServiceName() string {
+	return "OrderRepository"
 }
 
-func NewOrderItemRepository() repositories.OrderItemRepository {
-	return &OrderItemRepositoryImpl{}
+func (r *OrderItemRepositoryImpl) GetServiceName() string {
+	return "OrderItemRepository"
 }
 
 func (r *OrderRepositoryImpl) ensureQueries() {

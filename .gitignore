@@ -1,0 +1,99 @@
+# Compiled binaries and executables (files without extensions)
+main
+server
+app
+api
+cli
+/example/main
+/example/server
+/example/app
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# Build directories
+build/
+dist/
+bin/
+out/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment and config files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.local
+
+# Logs
+*.log
+logs/
+log/
+
+# Cache directories
+.cache/
+tmp/
+temp/
+.tmp/
+
+# Coverage reports
+*.cover
+*.coverprofile
+coverage.html
+coverage.out
+
+# Dependency directories
+vendor/
+node_modules/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker artifacts
+.dockerignore
+docker-compose.override.yml
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Archives
+*.7z
+*.jar
+*.rar
+*.zip
+*.tar.gz
+*.tgz
