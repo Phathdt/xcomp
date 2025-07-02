@@ -1,6 +1,7 @@
 package product
 
 import (
+	"example/infrastructure/database"
 	"example/modules/product/application/services"
 	"example/modules/product/infrastructure/http/controllers"
 	"example/modules/product/infrastructure/http/routes"
@@ -10,11 +11,22 @@ import (
 
 func CreateProductModule() xcomp.Module {
 	return xcomp.NewModule().
+		AddFactory("RedisClient", func(container *xcomp.Container) any {
+			redisService := &database.RedisService{}
+			container.Inject(redisService)
+			redisService.Initialize()
+			return redisService.GetClient()
+		}).
 		AddFactory("ProductRepository", func(container *xcomp.Container) any {
 			repo := &persistence.ProductRepositoryImpl{}
 			container.Inject(repo)
 			repo.Initialize()
 			return repo
+		}).
+		AddFactory("ProductCacheRepository", func(container *xcomp.Container) any {
+			cacheRepo := &persistence.ProductCacheRepositoryImpl{}
+			container.Inject(cacheRepo)
+			return cacheRepo
 		}).
 		AddFactory("ProductService", func(container *xcomp.Container) any {
 			service := &services.ProductService{}

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"math"
+	"time"
 
 	"example/modules/product/application/dto"
 	"example/modules/product/domain/entities"
@@ -12,7 +13,8 @@ import (
 )
 
 type ProductService struct {
-	ProductRepo repositories.ProductRepository `inject:"ProductRepository"`
+	ProductRepo      repositories.ProductRepository      `inject:"ProductRepository"`
+	ProductCacheRepo repositories.ProductCacheRepository `inject:"ProductCacheRepository"`
 }
 
 func (ps *ProductService) GetServiceName() string {
@@ -20,9 +22,23 @@ func (ps *ProductService) GetServiceName() string {
 }
 
 func (ps *ProductService) GetProduct(ctx context.Context, id uuid.UUID) (*dto.ProductResponse, error) {
-	product, err := ps.ProductRepo.GetByID(ctx, id)
+	product, err := ps.ProductCacheRepo.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		product, err = ps.ProductRepo.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		if setErr := ps.ProductCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
+		}
+	} else if product == nil {
+		product, err = ps.ProductRepo.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		if setErr := ps.ProductCacheRepo.Set(ctx, product, 5*time.Minute); setErr != nil {
+		}
 	}
 
 	return ps.toProductResponse(product), nil
@@ -178,6 +194,8 @@ func (ps *ProductService) UpdateProduct(ctx context.Context, id uuid.UUID, req *
 		return nil, err
 	}
 
+	ps.ProductCacheRepo.Delete(ctx, id)
+
 	return ps.toProductResponse(updatedProduct), nil
 }
 
@@ -187,11 +205,19 @@ func (ps *ProductService) UpdateProductStock(ctx context.Context, id uuid.UUID, 
 		return nil, err
 	}
 
+	ps.ProductCacheRepo.Delete(ctx, id)
+
 	return ps.toProductResponse(updatedProduct), nil
 }
 
 func (ps *ProductService) DeleteProduct(ctx context.Context, id uuid.UUID) error {
-	return ps.ProductRepo.Delete(ctx, id)
+	err := ps.ProductRepo.Delete(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	ps.ProductCacheRepo.Delete(ctx, id)
+	return nil
 }
 
 func (ps *ProductService) toProductResponse(product *entities.Product) *dto.ProductResponse {

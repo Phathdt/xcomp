@@ -10,3 +10,15 @@ services:
       - '5432:5432'
     volumes:
       - ./migrations:/migrations
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: product_api_redis
+    ports:
+      - '6379:6379'
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
