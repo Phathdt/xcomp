@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"example/infrastructure/database"
+	"example/modules/customer"
+	customerRoutes "example/modules/customer/infrastructure/http/routes"
 	"example/modules/order"
 	orderRoutes "example/modules/order/infrastructure/http/routes"
 	"example/modules/product"
@@ -75,11 +77,13 @@ func createAppModule(container *xcomp.Container) xcomp.Module {
 	infrastructureModule := createInfrastructureModule(container)
 	productModule := product.CreateProductModule()
 	orderModule := order.NewOrderModule()
+	customerModule := customer.CreateCustomerModule()
 
 	return xcomp.NewModule().
 		Import(infrastructureModule).
 		Import(productModule).
 		Import(orderModule).
+		Import(customerModule).
 		Build()
 }
 
@@ -174,6 +178,14 @@ func serveCommand(c *cli.Context) error {
 	}
 	orderRoutesInstance.SetupRoutes(app)
 	logger.Debug("Order routes registered")
+
+	customerRoutesInstance, ok := container.Get("CustomerRoutes").(*customerRoutes.CustomerRoutes)
+	if !ok {
+		logger.Fatal("Failed to get CustomerRoutes from container")
+		return nil
+	}
+	customerRoutesInstance.SetupRoutes(app)
+	logger.Debug("Customer routes registered")
 
 	port := c.Int("port")
 	if port == 0 {

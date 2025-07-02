@@ -6,7 +6,7 @@ import (
 	"math/big"
 
 	"example/modules/order/domain/entities"
-	"example/modules/order/infrastructure/persistence/queries"
+	"example/modules/order/infrastructure/query/gen"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -15,12 +15,12 @@ import (
 
 type OrderRepositoryImpl struct {
 	db *pgxpool.Pool `inject:"DatabaseConnection"`
-	q  *queries.Queries
+	q  *gen.Queries
 }
 
 type OrderItemRepositoryImpl struct {
 	db *pgxpool.Pool `inject:"DatabaseConnection"`
-	q  *queries.Queries
+	q  *gen.Queries
 }
 
 func (r *OrderRepositoryImpl) GetServiceName() string {
@@ -33,13 +33,13 @@ func (r *OrderItemRepositoryImpl) GetServiceName() string {
 
 func (r *OrderRepositoryImpl) ensureQueries() {
 	if r.q == nil {
-		r.q = queries.New(r.db)
+		r.q = gen.New(r.db)
 	}
 }
 
 func (r *OrderItemRepositoryImpl) ensureQueries() {
 	if r.q == nil {
-		r.q = queries.New(r.db)
+		r.q = gen.New(r.db)
 	}
 }
 
@@ -47,7 +47,7 @@ func (r *OrderRepositoryImpl) Create(ctx context.Context, order *entities.Order)
 	r.ensureQueries()
 	log.Printf("OrderRepository: Creating order %s", order.ID)
 
-	params := queries.CreateOrderParams{
+	params := gen.CreateOrderParams{
 		ID:              uuidToPgUUID(order.ID),
 		CustomerID:      uuidToPgUUID(order.CustomerID),
 		Status:          string(order.Status),
@@ -55,9 +55,9 @@ func (r *OrderRepositoryImpl) Create(ctx context.Context, order *entities.Order)
 		ShippingCost:    float64ToNumeric(order.ShippingCost),
 		TaxAmount:       float64ToNumeric(order.TaxAmount),
 		DiscountAmount:  float64ToNumeric(order.DiscountAmount),
-		Notes:           pgtype.Text{String: stringValue(order.Notes), Valid: order.Notes != nil},
-		ShippingAddress: pgtype.Text{String: stringValue(order.ShippingAddress), Valid: order.ShippingAddress != nil},
-		BillingAddress:  pgtype.Text{String: stringValue(order.BillingAddress), Valid: order.BillingAddress != nil},
+		Notes:           order.Notes,
+		ShippingAddress: order.ShippingAddress,
+		BillingAddress:  order.BillingAddress,
 		CreatedAt:       pgtype.Timestamptz{Time: order.CreatedAt, Valid: true},
 		UpdatedAt:       pgtype.Timestamptz{Time: order.UpdatedAt, Valid: true},
 	}
@@ -75,14 +75,14 @@ func (r *OrderRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*entit
 		return nil, err
 	}
 
-	return convertOrderFromDB(row), nil
+	return convertOrderFromDB(*row), nil
 }
 
 func (r *OrderRepositoryImpl) GetByCustomerID(ctx context.Context, customerID uuid.UUID, limit, offset int32) ([]*entities.Order, error) {
 	r.ensureQueries()
 	log.Printf("OrderRepository: Getting orders for customer %s", customerID)
 
-	params := queries.GetOrdersByCustomerIDParams{
+	params := gen.GetOrdersByCustomerIDParams{
 		CustomerID: uuidToPgUUID(customerID),
 		Limit:      limit,
 		Offset:     offset,
@@ -95,7 +95,7 @@ func (r *OrderRepositoryImpl) GetByCustomerID(ctx context.Context, customerID uu
 
 	orders := make([]*entities.Order, len(rows))
 	for i, row := range rows {
-		orders[i] = convertOrderFromDB(row)
+		orders[i] = convertOrderFromDB(*row)
 	}
 
 	return orders, nil
@@ -105,16 +105,16 @@ func (r *OrderRepositoryImpl) Update(ctx context.Context, order *entities.Order)
 	r.ensureQueries()
 	log.Printf("OrderRepository: Updating order %s", order.ID)
 
-	params := queries.UpdateOrderParams{
+	params := gen.UpdateOrderParams{
 		ID:              uuidToPgUUID(order.ID),
 		Status:          string(order.Status),
 		TotalAmount:     float64ToNumeric(order.TotalAmount),
 		ShippingCost:    float64ToNumeric(order.ShippingCost),
 		TaxAmount:       float64ToNumeric(order.TaxAmount),
 		DiscountAmount:  float64ToNumeric(order.DiscountAmount),
-		Notes:           pgtype.Text{String: stringValue(order.Notes), Valid: order.Notes != nil},
-		ShippingAddress: pgtype.Text{String: stringValue(order.ShippingAddress), Valid: order.ShippingAddress != nil},
-		BillingAddress:  pgtype.Text{String: stringValue(order.BillingAddress), Valid: order.BillingAddress != nil},
+		Notes:           order.Notes,
+		ShippingAddress: order.ShippingAddress,
+		BillingAddress:  order.BillingAddress,
 		UpdatedAt:       pgtype.Timestamptz{Time: order.UpdatedAt, Valid: true},
 	}
 
@@ -133,7 +133,7 @@ func (r *OrderRepositoryImpl) GetByStatus(ctx context.Context, status entities.O
 	r.ensureQueries()
 	log.Printf("OrderRepository: Getting orders by status %s", status)
 
-	params := queries.GetOrdersByStatusParams{
+	params := gen.GetOrdersByStatusParams{
 		Status: string(status),
 		Limit:  limit,
 		Offset: offset,
@@ -146,7 +146,7 @@ func (r *OrderRepositoryImpl) GetByStatus(ctx context.Context, status entities.O
 
 	orders := make([]*entities.Order, len(rows))
 	for i, row := range rows {
-		orders[i] = convertOrderFromDB(row)
+		orders[i] = convertOrderFromDB(*row)
 	}
 
 	return orders, nil
@@ -156,7 +156,7 @@ func (r *OrderRepositoryImpl) GetAll(ctx context.Context, limit, offset int32) (
 	r.ensureQueries()
 	log.Printf("OrderRepository: Getting all orders")
 
-	params := queries.GetAllOrdersParams{
+	params := gen.GetAllOrdersParams{
 		Limit:  limit,
 		Offset: offset,
 	}
@@ -168,7 +168,7 @@ func (r *OrderRepositoryImpl) GetAll(ctx context.Context, limit, offset int32) (
 
 	orders := make([]*entities.Order, len(rows))
 	for i, row := range rows {
-		orders[i] = convertOrderFromDB(row)
+		orders[i] = convertOrderFromDB(*row)
 	}
 
 	return orders, nil
@@ -192,7 +192,7 @@ func (r *OrderItemRepositoryImpl) Create(ctx context.Context, orderItem *entitie
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Creating order item %s", orderItem.ID)
 
-	params := queries.CreateOrderItemParams{
+	params := gen.CreateOrderItemParams{
 		ID:          uuidToPgUUID(orderItem.ID),
 		OrderID:     uuidToPgUUID(orderItem.OrderID),
 		ProductID:   uuidToPgUUID(orderItem.ProductID),
@@ -215,7 +215,7 @@ func (r *OrderItemRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*e
 		return nil, err
 	}
 
-	return convertOrderItemFromDB(row), nil
+	return convertOrderItemFromDB(*row), nil
 }
 
 func (r *OrderItemRepositoryImpl) GetByOrderID(ctx context.Context, orderID uuid.UUID) ([]*entities.OrderItem, error) {
@@ -227,19 +227,19 @@ func (r *OrderItemRepositoryImpl) GetByOrderID(ctx context.Context, orderID uuid
 		return nil, err
 	}
 
-	items := make([]*entities.OrderItem, len(rows))
+	orderItems := make([]*entities.OrderItem, len(rows))
 	for i, row := range rows {
-		items[i] = convertOrderItemFromDB(row)
+		orderItems[i] = convertOrderItemFromDB(*row)
 	}
 
-	return items, nil
+	return orderItems, nil
 }
 
 func (r *OrderItemRepositoryImpl) Update(ctx context.Context, orderItem *entities.OrderItem) error {
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Updating order item %s", orderItem.ID)
 
-	params := queries.UpdateOrderItemParams{
+	params := gen.UpdateOrderItemParams{
 		ID:         uuidToPgUUID(orderItem.ID),
 		Quantity:   orderItem.Quantity,
 		UnitPrice:  float64ToNumeric(orderItem.UnitPrice),
@@ -268,8 +268,8 @@ func (r *OrderItemRepositoryImpl) CreateBatch(ctx context.Context, orderItems []
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Creating batch of %d order items", len(orderItems))
 
-	for _, item := range orderItems {
-		if err := r.Create(ctx, item); err != nil {
+	for _, orderItem := range orderItems {
+		if err := r.Create(ctx, orderItem); err != nil {
 			return err
 		}
 	}
@@ -277,34 +277,32 @@ func (r *OrderItemRepositoryImpl) CreateBatch(ctx context.Context, orderItems []
 	return nil
 }
 
-func convertOrderFromDB(row queries.Order) *entities.Order {
+func convertOrderFromDB(row gen.Order) *entities.Order {
 	order := &entities.Order{
-		ID:             pgUUIDToUUID(row.ID),
-		CustomerID:     pgUUIDToUUID(row.CustomerID),
-		Status:         entities.OrderStatus(row.Status),
-		TotalAmount:    numericToFloat64(row.TotalAmount),
-		ShippingCost:   numericToFloat64(row.ShippingCost),
-		TaxAmount:      numericToFloat64(row.TaxAmount),
-		DiscountAmount: numericToFloat64(row.DiscountAmount),
-		CreatedAt:      row.CreatedAt.Time,
-		UpdatedAt:      row.UpdatedAt.Time,
-		OrderItems:     make([]*entities.OrderItem, 0),
+		ID:              pgUUIDToUUID(row.ID),
+		CustomerID:      pgUUIDToUUID(row.CustomerID),
+		Status:          entities.OrderStatus(row.Status),
+		TotalAmount:     numericToFloat64(row.TotalAmount),
+		ShippingCost:    numericToFloat64(row.ShippingCost),
+		TaxAmount:       numericToFloat64(row.TaxAmount),
+		DiscountAmount:  numericToFloat64(row.DiscountAmount),
+		Notes:           row.Notes,
+		ShippingAddress: row.ShippingAddress,
+		BillingAddress:  row.BillingAddress,
 	}
 
-	if row.Notes.Valid {
-		order.Notes = &row.Notes.String
+	if row.CreatedAt.Valid {
+		order.CreatedAt = row.CreatedAt.Time
 	}
-	if row.ShippingAddress.Valid {
-		order.ShippingAddress = &row.ShippingAddress.String
-	}
-	if row.BillingAddress.Valid {
-		order.BillingAddress = &row.BillingAddress.String
+
+	if row.UpdatedAt.Valid {
+		order.UpdatedAt = row.UpdatedAt.Time
 	}
 
 	return order
 }
 
-func convertOrderItemFromDB(row queries.OrderItem) *entities.OrderItem {
+func convertOrderItemFromDB(row gen.OrderItem) *entities.OrderItem {
 	return &entities.OrderItem{
 		ID:          pgUUIDToUUID(row.ID),
 		OrderID:     pgUUIDToUUID(row.OrderID),
@@ -343,11 +341,4 @@ func numericToFloat64(n pgtype.Numeric) float64 {
 		return 0.0
 	}
 	return float64(n.Int.Int64()) / 100.0
-}
-
-func stringValue(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
