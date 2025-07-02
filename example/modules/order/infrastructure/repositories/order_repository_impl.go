@@ -14,13 +14,13 @@ import (
 )
 
 type OrderRepositoryImpl struct {
-	db *pgxpool.Pool `inject:"DatabaseConnection"`
-	q  *gen.Queries
+	DB *pgxpool.Pool `inject:"DatabaseConnection"`
+	Q  *gen.Queries
 }
 
 type OrderItemRepositoryImpl struct {
-	db *pgxpool.Pool `inject:"DatabaseConnection"`
-	q  *gen.Queries
+	DB *pgxpool.Pool `inject:"DatabaseConnection"`
+	Q  *gen.Queries
 }
 
 func (r *OrderRepositoryImpl) GetServiceName() string {
@@ -32,14 +32,14 @@ func (r *OrderItemRepositoryImpl) GetServiceName() string {
 }
 
 func (r *OrderRepositoryImpl) ensureQueries() {
-	if r.q == nil {
-		r.q = gen.New(r.db)
+	if r.Q == nil {
+		r.Q = gen.New(r.DB)
 	}
 }
 
 func (r *OrderItemRepositoryImpl) ensureQueries() {
-	if r.q == nil {
-		r.q = gen.New(r.db)
+	if r.Q == nil {
+		r.Q = gen.New(r.DB)
 	}
 }
 
@@ -62,7 +62,7 @@ func (r *OrderRepositoryImpl) Create(ctx context.Context, order *entities.Order)
 		UpdatedAt:       pgtype.Timestamptz{Time: order.UpdatedAt, Valid: true},
 	}
 
-	_, err := r.q.CreateOrder(ctx, params)
+	_, err := r.Q.CreateOrder(ctx, params)
 	return err
 }
 
@@ -70,7 +70,7 @@ func (r *OrderRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*entit
 	r.ensureQueries()
 	log.Printf("OrderRepository: Getting order by ID %s", id)
 
-	row, err := r.q.GetOrderByID(ctx, uuidToPgUUID(id))
+	row, err := r.Q.GetOrderByID(ctx, uuidToPgUUID(id))
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (r *OrderRepositoryImpl) GetByCustomerID(ctx context.Context, customerID uu
 		Offset:     offset,
 	}
 
-	rows, err := r.q.GetOrdersByCustomerID(ctx, params)
+	rows, err := r.Q.GetOrdersByCustomerID(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (r *OrderRepositoryImpl) Update(ctx context.Context, order *entities.Order)
 		UpdatedAt:       pgtype.Timestamptz{Time: order.UpdatedAt, Valid: true},
 	}
 
-	_, err := r.q.UpdateOrder(ctx, params)
+	_, err := r.Q.UpdateOrder(ctx, params)
 	return err
 }
 
@@ -126,7 +126,7 @@ func (r *OrderRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	r.ensureQueries()
 	log.Printf("OrderRepository: Deleting order %s", id)
 
-	return r.q.DeleteOrder(ctx, uuidToPgUUID(id))
+	return r.Q.DeleteOrder(ctx, uuidToPgUUID(id))
 }
 
 func (r *OrderRepositoryImpl) GetByStatus(ctx context.Context, status entities.OrderStatus, limit, offset int32) ([]*entities.Order, error) {
@@ -139,7 +139,7 @@ func (r *OrderRepositoryImpl) GetByStatus(ctx context.Context, status entities.O
 		Offset: offset,
 	}
 
-	rows, err := r.q.GetOrdersByStatus(ctx, params)
+	rows, err := r.Q.GetOrdersByStatus(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (r *OrderRepositoryImpl) GetAll(ctx context.Context, limit, offset int32) (
 		Offset: offset,
 	}
 
-	rows, err := r.q.GetAllOrders(ctx, params)
+	rows, err := r.Q.GetAllOrders(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -178,14 +178,14 @@ func (r *OrderRepositoryImpl) Count(ctx context.Context) (int64, error) {
 	r.ensureQueries()
 	log.Printf("OrderRepository: Counting orders")
 
-	return r.q.CountOrders(ctx)
+	return r.Q.CountOrders(ctx)
 }
 
 func (r *OrderRepositoryImpl) CountByCustomerID(ctx context.Context, customerID uuid.UUID) (int64, error) {
 	r.ensureQueries()
 	log.Printf("OrderRepository: Counting orders for customer %s", customerID)
 
-	return r.q.CountOrdersByCustomerID(ctx, uuidToPgUUID(customerID))
+	return r.Q.CountOrdersByCustomerID(ctx, uuidToPgUUID(customerID))
 }
 
 func (r *OrderItemRepositoryImpl) Create(ctx context.Context, orderItem *entities.OrderItem) error {
@@ -202,7 +202,7 @@ func (r *OrderItemRepositoryImpl) Create(ctx context.Context, orderItem *entitie
 		TotalPrice:  float64ToNumeric(orderItem.TotalPrice),
 	}
 
-	_, err := r.q.CreateOrderItem(ctx, params)
+	_, err := r.Q.CreateOrderItem(ctx, params)
 	return err
 }
 
@@ -210,7 +210,7 @@ func (r *OrderItemRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*e
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Getting order item by ID %s", id)
 
-	row, err := r.q.GetOrderItemByID(ctx, uuidToPgUUID(id))
+	row, err := r.Q.GetOrderItemByID(ctx, uuidToPgUUID(id))
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func (r *OrderItemRepositoryImpl) GetByOrderID(ctx context.Context, orderID uuid
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Getting order items for order %s", orderID)
 
-	rows, err := r.q.GetOrderItemsByOrderID(ctx, uuidToPgUUID(orderID))
+	rows, err := r.Q.GetOrderItemsByOrderID(ctx, uuidToPgUUID(orderID))
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +246,7 @@ func (r *OrderItemRepositoryImpl) Update(ctx context.Context, orderItem *entitie
 		TotalPrice: float64ToNumeric(orderItem.TotalPrice),
 	}
 
-	_, err := r.q.UpdateOrderItem(ctx, params)
+	_, err := r.Q.UpdateOrderItem(ctx, params)
 	return err
 }
 
@@ -254,22 +254,22 @@ func (r *OrderItemRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) erro
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Deleting order item %s", id)
 
-	return r.q.DeleteOrderItem(ctx, uuidToPgUUID(id))
+	return r.Q.DeleteOrderItem(ctx, uuidToPgUUID(id))
 }
 
 func (r *OrderItemRepositoryImpl) DeleteByOrderID(ctx context.Context, orderID uuid.UUID) error {
 	r.ensureQueries()
 	log.Printf("OrderItemRepository: Deleting order items for order %s", orderID)
 
-	return r.q.DeleteOrderItemsByOrderID(ctx, uuidToPgUUID(orderID))
+	return r.Q.DeleteOrderItemsByOrderID(ctx, uuidToPgUUID(orderID))
 }
 
 func (r *OrderItemRepositoryImpl) CreateBatch(ctx context.Context, orderItems []*entities.OrderItem) error {
 	r.ensureQueries()
-	log.Printf("OrderItemRepository: Creating batch of %d order items", len(orderItems))
+	log.Printf("OrderItemRepository: Creating batch of order items")
 
-	for _, orderItem := range orderItems {
-		if err := r.Create(ctx, orderItem); err != nil {
+	for _, item := range orderItems {
+		if err := r.Create(ctx, item); err != nil {
 			return err
 		}
 	}

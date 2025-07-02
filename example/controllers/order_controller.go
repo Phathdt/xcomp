@@ -12,7 +12,7 @@ import (
 )
 
 type OrderController struct {
-	orderService interfaces.OrderService `inject:"OrderService"`
+	OrderService interfaces.OrderService `inject:"OrderService"`
 }
 
 func NewOrderController() *OrderController {
@@ -27,7 +27,7 @@ func (c *OrderController) CreateOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.CreateOrder(ctx.Context(), req)
+	order, err := c.OrderService.CreateOrder(ctx.Context(), req)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -46,7 +46,7 @@ func (c *OrderController) GetOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.GetOrderByID(ctx.Context(), id)
+	order, err := c.OrderService.GetOrderByID(ctx.Context(), id)
 	if err != nil {
 		return ctx.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Order not found",
@@ -79,12 +79,12 @@ func (c *OrderController) GetOrders(ctx *fiber.Ctx) error {
 				"error": "Invalid customer ID",
 			})
 		}
-		orders, err = c.orderService.GetOrdersByCustomerID(ctx.Context(), customerID, int32(page), int32(pageSize))
+		orders, err = c.OrderService.GetOrdersByCustomerID(ctx.Context(), customerID, int32(page), int32(pageSize))
 	} else if statusParam != "" {
 		status := entities.OrderStatus(statusParam)
-		orders, err = c.orderService.GetOrdersByStatus(ctx.Context(), status, int32(page), int32(pageSize))
+		orders, err = c.OrderService.GetOrdersByStatus(ctx.Context(), status, int32(page), int32(pageSize))
 	} else {
-		orders, err = c.orderService.GetAllOrders(ctx.Context(), int32(page), int32(pageSize))
+		orders, err = c.OrderService.GetAllOrders(ctx.Context(), int32(page), int32(pageSize))
 	}
 
 	if err != nil {
@@ -112,7 +112,7 @@ func (c *OrderController) UpdateOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.UpdateOrder(ctx.Context(), id, req)
+	order, err := c.OrderService.UpdateOrder(ctx.Context(), id, req)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -131,7 +131,7 @@ func (c *OrderController) ConfirmOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.ConfirmOrder(ctx.Context(), id)
+	order, err := c.OrderService.ConfirmOrder(ctx.Context(), id)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -150,7 +150,7 @@ func (c *OrderController) ShipOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.ShipOrder(ctx.Context(), id)
+	order, err := c.OrderService.ShipOrder(ctx.Context(), id)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -169,7 +169,7 @@ func (c *OrderController) DeliverOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.DeliverOrder(ctx.Context(), id)
+	order, err := c.OrderService.DeliverOrder(ctx.Context(), id)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -188,7 +188,7 @@ func (c *OrderController) CancelOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.CancelOrder(ctx.Context(), id)
+	order, err := c.OrderService.CancelOrder(ctx.Context(), id)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -214,7 +214,7 @@ func (c *OrderController) AddOrderItem(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.AddOrderItem(ctx.Context(), id, req)
+	order, err := c.OrderService.AddOrderItem(ctx.Context(), id, req)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -248,7 +248,7 @@ func (c *OrderController) UpdateOrderItemQuantity(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.UpdateOrderItemQuantity(ctx.Context(), id, productID, req)
+	order, err := c.OrderService.UpdateOrderItemQuantity(ctx.Context(), id, productID, req)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -275,7 +275,7 @@ func (c *OrderController) RemoveOrderItem(ctx *fiber.Ctx) error {
 		})
 	}
 
-	order, err := c.orderService.RemoveOrderItem(ctx.Context(), id, productID)
+	order, err := c.OrderService.RemoveOrderItem(ctx.Context(), id, productID)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -294,7 +294,7 @@ func (c *OrderController) DeleteOrder(ctx *fiber.Ctx) error {
 		})
 	}
 
-	err = c.orderService.DeleteOrder(ctx.Context(), id)
+	err = c.OrderService.DeleteOrder(ctx.Context(), id)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),

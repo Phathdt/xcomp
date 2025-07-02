@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -15,9 +16,9 @@ import (
 )
 
 type OrderService struct {
-	orderRepo      interfaces.OrderRepository      `inject:"OrderRepository"`
-	orderItemRepo  interfaces.OrderItemRepository  `inject:"OrderItemRepository"`
-	orderCacheRepo interfaces.OrderCacheRepository `inject:"OrderCacheRepository"`
+	OrderRepo      interfaces.OrderRepository      `inject:"OrderRepository"`
+	OrderItemRepo  interfaces.OrderItemRepository  `inject:"OrderItemRepository"`
+	OrderCacheRepo interfaces.OrderCacheRepository `inject:"OrderCacheRepository"`
 	Logger         xcomp.Logger                    `inject:"Logger"`
 }
 
@@ -48,12 +49,12 @@ func (s *OrderService) CreateOrder(ctx context.Context, req dto.CreateOrderReque
 		return nil, err
 	}
 
-	if err := s.orderRepo.Create(ctx, order); err != nil {
+	if err := s.OrderRepo.Create(ctx, order); err != nil {
 		return nil, err
 	}
 
 	for _, item := range order.OrderItems {
-		if err := s.orderItemRepo.Create(ctx, item); err != nil {
+		if err := s.OrderItemRepo.Create(ctx, item); err != nil {
 			return nil, err
 		}
 	}
@@ -65,37 +66,37 @@ func (s *OrderService) CreateOrder(ctx context.Context, req dto.CreateOrderReque
 func (s *OrderService) GetOrderByID(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
 	s.Logger.Info("Getting order by ID", xcomp.Field("order_id", id))
 
-	order, err := s.orderCacheRepo.Get(ctx, id)
+	order, err := s.OrderCacheRepo.Get(ctx, id)
 	if err != nil {
-		order, err = s.orderRepo.GetByID(ctx, id)
+		order, err = s.OrderRepo.GetByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 
-		items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+		items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 		order.OrderItems = items
 
-		if setErr := s.orderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
+		if setErr := s.OrderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
 			s.Logger.Warn("Failed to cache order",
 				xcomp.Field("order_id", id),
 				xcomp.Field("error", setErr))
 		}
 	} else if order == nil {
-		order, err = s.orderRepo.GetByID(ctx, id)
+		order, err = s.OrderRepo.GetByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 
-		items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+		items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 		order.OrderItems = items
 
-		if setErr := s.orderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
+		if setErr := s.OrderCacheRepo.Set(ctx, order, 5*time.Minute); setErr != nil {
 			log.Printf("Failed to cache order: %v", setErr)
 		}
 	}
@@ -111,20 +112,20 @@ func (s *OrderService) GetOrdersByCustomerID(ctx context.Context, customerID uui
 		xcomp.Field("page_size", pageSize))
 
 	offset := (page - 1) * pageSize
-	orders, err := s.orderRepo.GetByCustomerID(ctx, customerID, pageSize, offset)
+	orders, err := s.OrderRepo.GetByCustomerID(ctx, customerID, pageSize, offset)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, order := range orders {
-		items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
+		items, err := s.OrderItemRepo.GetByOrderID(ctx, order.ID)
 		if err != nil {
 			return nil, err
 		}
 		order.OrderItems = items
 	}
 
-	total, err := s.orderRepo.CountByCustomerID(ctx, customerID)
+	total, err := s.OrderRepo.CountByCustomerID(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,20 +138,20 @@ func (s *OrderService) GetAllOrders(ctx context.Context, page, pageSize int32) (
 	log.Printf("OrderService: Getting all orders")
 
 	offset := (page - 1) * pageSize
-	orders, err := s.orderRepo.GetAll(ctx, pageSize, offset)
+	orders, err := s.OrderRepo.GetAll(ctx, pageSize, offset)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, order := range orders {
-		items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
+		items, err := s.OrderItemRepo.GetByOrderID(ctx, order.ID)
 		if err != nil {
 			return nil, err
 		}
 		order.OrderItems = items
 	}
 
-	total, err := s.orderRepo.Count(ctx)
+	total, err := s.OrderRepo.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -162,21 +163,32 @@ func (s *OrderService) GetAllOrders(ctx context.Context, page, pageSize int32) (
 func (s *OrderService) GetOrdersByStatus(ctx context.Context, status entities.OrderStatus, page, pageSize int32) (*dto.OrderListResponse, error) {
 	log.Printf("OrderService: Getting orders by status %s", status)
 
+	// Check if dependencies are properly injected
+	if s.OrderRepo == nil {
+		return nil, fmt.Errorf("orderRepo is not injected")
+	}
+	if s.OrderItemRepo == nil {
+		return nil, fmt.Errorf("orderItemRepo is not injected")
+	}
+
 	offset := (page - 1) * pageSize
-	orders, err := s.orderRepo.GetByStatus(ctx, status, pageSize, offset)
+	orders, err := s.OrderRepo.GetByStatus(ctx, status, pageSize, offset)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, order := range orders {
-		items, err := s.orderItemRepo.GetByOrderID(ctx, order.ID)
+		if order == nil {
+			continue
+		}
+		items, err := s.OrderItemRepo.GetByOrderID(ctx, order.ID)
 		if err != nil {
 			return nil, err
 		}
 		order.OrderItems = items
 	}
 
-	total, err := s.orderRepo.Count(ctx)
+	total, err := s.OrderRepo.Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +200,7 @@ func (s *OrderService) GetOrdersByStatus(ctx context.Context, status entities.Or
 func (s *OrderService) UpdateOrder(ctx context.Context, id uuid.UUID, req dto.UpdateOrderRequest) (*dto.OrderResponse, error) {
 	s.Logger.Info("Updating order", xcomp.Field("order_id", id))
 
-	order, err := s.orderRepo.GetByID(ctx, id)
+	order, err := s.OrderRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -221,11 +233,11 @@ func (s *OrderService) UpdateOrder(ctx context.Context, id uuid.UUID, req dto.Up
 		return nil, err
 	}
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +250,7 @@ func (s *OrderService) UpdateOrder(ctx context.Context, id uuid.UUID, req dto.Up
 func (s *OrderService) ConfirmOrder(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Confirming order %s", id)
 
-	order, err := s.orderRepo.GetByID(ctx, id)
+	order, err := s.OrderRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -247,11 +259,11 @@ func (s *OrderService) ConfirmOrder(ctx context.Context, id uuid.UUID) (*dto.Ord
 		return nil, err
 	}
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +276,7 @@ func (s *OrderService) ConfirmOrder(ctx context.Context, id uuid.UUID) (*dto.Ord
 func (s *OrderService) ShipOrder(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Shipping order %s", id)
 
-	order, err := s.orderRepo.GetByID(ctx, id)
+	order, err := s.OrderRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +285,11 @@ func (s *OrderService) ShipOrder(ctx context.Context, id uuid.UUID) (*dto.OrderR
 		return nil, err
 	}
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +302,7 @@ func (s *OrderService) ShipOrder(ctx context.Context, id uuid.UUID) (*dto.OrderR
 func (s *OrderService) DeliverOrder(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Delivering order %s", id)
 
-	order, err := s.orderRepo.GetByID(ctx, id)
+	order, err := s.OrderRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -299,11 +311,11 @@ func (s *OrderService) DeliverOrder(ctx context.Context, id uuid.UUID) (*dto.Ord
 		return nil, err
 	}
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +328,7 @@ func (s *OrderService) DeliverOrder(ctx context.Context, id uuid.UUID) (*dto.Ord
 func (s *OrderService) CancelOrder(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Cancelling order %s", id)
 
-	order, err := s.orderRepo.GetByID(ctx, id)
+	order, err := s.OrderRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -325,11 +337,11 @@ func (s *OrderService) CancelOrder(ctx context.Context, id uuid.UUID) (*dto.Orde
 		return nil, err
 	}
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, id)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +354,7 @@ func (s *OrderService) CancelOrder(ctx context.Context, id uuid.UUID) (*dto.Orde
 func (s *OrderService) AddOrderItem(ctx context.Context, orderID uuid.UUID, req dto.AddOrderItemRequest) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Adding item to order %s", orderID)
 
-	order, err := s.orderRepo.GetByID(ctx, orderID)
+	order, err := s.OrderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -353,12 +365,12 @@ func (s *OrderService) AddOrderItem(ctx context.Context, orderID uuid.UUID, req 
 
 	order.CalculateTotal()
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
 	newItem := order.OrderItems[len(order.OrderItems)-1]
-	if err := s.orderItemRepo.Create(ctx, newItem); err != nil {
+	if err := s.OrderItemRepo.Create(ctx, newItem); err != nil {
 		return nil, err
 	}
 
@@ -369,12 +381,12 @@ func (s *OrderService) AddOrderItem(ctx context.Context, orderID uuid.UUID, req 
 func (s *OrderService) UpdateOrderItemQuantity(ctx context.Context, orderID, productID uuid.UUID, req dto.UpdateOrderItemQuantityRequest) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Updating item quantity in order %s", orderID)
 
-	order, err := s.orderRepo.GetByID(ctx, orderID)
+	order, err := s.OrderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, orderID)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -386,13 +398,13 @@ func (s *OrderService) UpdateOrderItemQuantity(ctx context.Context, orderID, pro
 
 	order.CalculateTotal()
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
 	for _, item := range order.OrderItems {
 		if item.ProductID == productID {
-			if err := s.orderItemRepo.Update(ctx, item); err != nil {
+			if err := s.OrderItemRepo.Update(ctx, item); err != nil {
 				return nil, err
 			}
 			break
@@ -406,12 +418,12 @@ func (s *OrderService) UpdateOrderItemQuantity(ctx context.Context, orderID, pro
 func (s *OrderService) RemoveOrderItem(ctx context.Context, orderID, productID uuid.UUID) (*dto.OrderResponse, error) {
 	log.Printf("OrderService: Removing item from order %s", orderID)
 
-	order, err := s.orderRepo.GetByID(ctx, orderID)
+	order, err := s.OrderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 
-	items, err := s.orderItemRepo.GetByOrderID(ctx, orderID)
+	items, err := s.OrderItemRepo.GetByOrderID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -435,11 +447,11 @@ func (s *OrderService) RemoveOrderItem(ctx context.Context, orderID, productID u
 
 	order.CalculateTotal()
 
-	if err := s.orderRepo.Update(ctx, order); err != nil {
+	if err := s.OrderRepo.Update(ctx, order); err != nil {
 		return nil, err
 	}
 
-	if err := s.orderItemRepo.Delete(ctx, itemToRemove.ID); err != nil {
+	if err := s.OrderItemRepo.Delete(ctx, itemToRemove.ID); err != nil {
 		return nil, err
 	}
 
@@ -450,9 +462,9 @@ func (s *OrderService) RemoveOrderItem(ctx context.Context, orderID, productID u
 func (s *OrderService) DeleteOrder(ctx context.Context, id uuid.UUID) error {
 	log.Printf("OrderService: Deleting order %s", id)
 
-	if err := s.orderItemRepo.DeleteByOrderID(ctx, id); err != nil {
+	if err := s.OrderItemRepo.DeleteByOrderID(ctx, id); err != nil {
 		return err
 	}
 
-	return s.orderRepo.Delete(ctx, id)
+	return s.OrderRepo.Delete(ctx, id)
 }

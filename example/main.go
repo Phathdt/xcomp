@@ -4,14 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"example/infrastructure/async"
 	"example/infrastructure/database"
 	"example/modules/customer"
+	customerInterfaces "example/modules/customer/domain/interfaces"
 	"example/modules/order"
+	orderInterfaces "example/modules/order/domain/interfaces"
 	"example/modules/product"
 
 	"xcomp"
@@ -20,6 +24,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/redis/go-redis/v9"
 	"github.com/urfave/cli/v2"
 )
 
@@ -58,7 +63,7 @@ func createInfrastructureModule(container *xcomp.Container) xcomp.Module {
 					logger.Error("Failed to inject DatabaseConnection dependencies",
 						xcomp.Field("error", err))
 				}
-				return dbConn
+				panic("Failed to inject DatabaseConnection dependencies: " + err.Error())
 			}
 			if err := dbConn.Initialize(); err != nil {
 				if logger, ok := container.Get("Logger").(xcomp.Logger); ok {
@@ -71,7 +76,7 @@ func createInfrastructureModule(container *xcomp.Container) xcomp.Module {
 			if logger, ok := container.Get("Logger").(xcomp.Logger); ok {
 				logger.Info("Database connection initialized successfully")
 			}
-			return dbConn
+			return dbConn.GetDB()
 		}).
 		Build()
 }
@@ -83,6 +88,7 @@ func createAppModule(container *xcomp.Container) xcomp.Module {
 	customerModule := customer.CreateCustomerModule()
 	transportModule := CreateTransportModule()
 
+	// Register all business modules first - do NOT include AsyncModule here
 	return xcomp.NewModule().
 		Import(infrastructureModule).
 		Import(productModule).
@@ -172,6 +178,47 @@ func serveCommand(c *cli.Context) error {
 	setupRoutes(app, container)
 	logger.Debug("All routes registered")
 
+	// Create AsyncService AFTER all modules are registered and dependencies are available
+	redisClient, ok := container.Get("RedisClient").(*redis.Client)
+	if !ok || redisClient == nil {
+		return fmt.Errorf("failed to get RedisClient from container")
+	}
+
+	orderService, ok := container.Get("OrderService").(orderInterfaces.OrderService)
+	if !ok || orderService == nil {
+		return fmt.Errorf("failed to get OrderService from container")
+	}
+
+	customerService, ok := container.Get("CustomerService").(customerInterfaces.CustomerService)
+	if !ok || customerService == nil {
+		return fmt.Errorf("failed to get CustomerService from container")
+	}
+
+	logger.Info("Creating AsyncService manually after all dependencies are available")
+	asyncService := async.NewAsyncService(redisClient, orderService, customerService, logger)
+
+	asyncCtx, asyncCancel := context.WithCancel(context.Background())
+	defer asyncCancel()
+
+	if err := asyncService.Start(asyncCtx); err != nil {
+		return fmt.Errorf("failed to start async service: %w", err)
+	}
+
+	// Setup asynq monitoring endpoint
+	monitorHandler := asyncService.GetMonitorHandler()
+	go func() {
+		monitorPort := configService.GetInt("async.monitor.port", 8080)
+		logger.Info("Asynq monitor starting",
+			xcomp.Field("port", monitorPort),
+			xcomp.Field("path", "/monitoring"))
+
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", monitorPort), monitorHandler); err != nil {
+			logger.Error("Asynq monitor failed to start",
+				xcomp.Field("port", monitorPort),
+				xcomp.Field("error", err))
+		}
+	}()
+
 	port := c.Int("port")
 	if port == 0 {
 		port = configService.GetInt("app.port", 3000)
@@ -203,6 +250,11 @@ func serveCommand(c *cli.Context) error {
 			xcomp.Field("timeout", "30s"))
 	} else {
 		logger.Info("HTTP server shutdown completed")
+	}
+
+	// Stop async service
+	if asyncService != nil {
+		asyncService.Stop()
 	}
 
 	if dbConn, ok := container.Get("DatabaseConnection").(*database.DatabaseConnection); ok {

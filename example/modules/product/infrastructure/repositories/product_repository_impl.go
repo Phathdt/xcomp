@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"time"
 
-	"example/infrastructure/database"
 	"example/modules/product/domain/entities"
 	"example/modules/product/domain/interfaces"
 	"example/modules/product/infrastructure/query/gen"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ProductRepositoryImpl struct {
-	DbConnection *database.DatabaseConnection `inject:"DatabaseConnection"`
-	queries      *gen.Queries
+	DB      *pgxpool.Pool `inject:"DatabaseConnection"`
+	Queries *gen.Queries
 }
 
 func (pr *ProductRepositoryImpl) GetServiceName() string {
@@ -24,13 +24,13 @@ func (pr *ProductRepositoryImpl) GetServiceName() string {
 }
 
 func (pr *ProductRepositoryImpl) Initialize() {
-	if pr.DbConnection != nil && pr.DbConnection.GetDB() != nil {
-		pr.queries = gen.New(pr.DbConnection.GetDB())
+	if pr.DB != nil {
+		pr.Queries = gen.New(pr.DB)
 	}
 }
 
 func (pr *ProductRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
@@ -39,7 +39,7 @@ func (pr *ProductRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*en
 		return nil, fmt.Errorf("failed to convert UUID: %w", err)
 	}
 
-	result, err := pr.queries.GetProduct(ctx, pgID)
+	result, err := pr.Queries.GetProduct(ctx, pgID)
 	if err != nil {
 		return nil, pr.convertError(err)
 	}
@@ -48,11 +48,11 @@ func (pr *ProductRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*en
 }
 
 func (pr *ProductRepositoryImpl) List(ctx context.Context, limit, offset int32) ([]*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
-	results, err := pr.queries.ListProducts(ctx, gen.ListProductsParams{
+	results, err := pr.Queries.ListProducts(ctx, gen.ListProductsParams{
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -69,11 +69,11 @@ func (pr *ProductRepositoryImpl) List(ctx context.Context, limit, offset int32) 
 }
 
 func (pr *ProductRepositoryImpl) ListByCategory(ctx context.Context, category string, limit, offset int32) ([]*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
-	results, err := pr.queries.ListProductsByCategory(ctx, gen.ListProductsByCategoryParams{
+	results, err := pr.Queries.ListProductsByCategory(ctx, gen.ListProductsByCategoryParams{
 		Category: &category,
 		Limit:    limit,
 		Offset:   offset,
@@ -91,11 +91,11 @@ func (pr *ProductRepositoryImpl) ListByCategory(ctx context.Context, category st
 }
 
 func (pr *ProductRepositoryImpl) Search(ctx context.Context, searchQuery string, limit, offset int32) ([]*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
-	results, err := pr.queries.SearchProducts(ctx, gen.SearchProductsParams{
+	results, err := pr.Queries.SearchProducts(ctx, gen.SearchProductsParams{
 		Column1: &searchQuery,
 		Limit:   limit,
 		Offset:  offset,
@@ -113,7 +113,7 @@ func (pr *ProductRepositoryImpl) Search(ctx context.Context, searchQuery string,
 }
 
 func (pr *ProductRepositoryImpl) Create(ctx context.Context, product *entities.Product) (*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
@@ -122,7 +122,7 @@ func (pr *ProductRepositoryImpl) Create(ctx context.Context, product *entities.P
 		return nil, fmt.Errorf("failed to convert price: %w", err)
 	}
 
-	result, err := pr.queries.CreateProduct(ctx, gen.CreateProductParams{
+	result, err := pr.Queries.CreateProduct(ctx, gen.CreateProductParams{
 		Name:          product.Name,
 		Description:   product.Description,
 		Price:         pgPrice,
@@ -137,7 +137,7 @@ func (pr *ProductRepositoryImpl) Create(ctx context.Context, product *entities.P
 }
 
 func (pr *ProductRepositoryImpl) Update(ctx context.Context, product *entities.Product) (*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
@@ -151,7 +151,7 @@ func (pr *ProductRepositoryImpl) Update(ctx context.Context, product *entities.P
 		return nil, fmt.Errorf("failed to convert price: %w", err)
 	}
 
-	result, err := pr.queries.UpdateProduct(ctx, gen.UpdateProductParams{
+	result, err := pr.Queries.UpdateProduct(ctx, gen.UpdateProductParams{
 		ID:            pgID,
 		Name:          product.Name,
 		Description:   product.Description,
@@ -167,7 +167,7 @@ func (pr *ProductRepositoryImpl) Update(ctx context.Context, product *entities.P
 }
 
 func (pr *ProductRepositoryImpl) UpdateStock(ctx context.Context, id uuid.UUID, stockQuantity int32) (*entities.Product, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
@@ -176,7 +176,7 @@ func (pr *ProductRepositoryImpl) UpdateStock(ctx context.Context, id uuid.UUID, 
 		return nil, fmt.Errorf("failed to convert UUID: %w", err)
 	}
 
-	result, err := pr.queries.UpdateProductStock(ctx, gen.UpdateProductStockParams{
+	result, err := pr.Queries.UpdateProductStock(ctx, gen.UpdateProductStockParams{
 		ID:            pgID,
 		StockQuantity: stockQuantity,
 	})
@@ -188,7 +188,7 @@ func (pr *ProductRepositoryImpl) UpdateStock(ctx context.Context, id uuid.UUID, 
 }
 
 func (pr *ProductRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
@@ -197,23 +197,23 @@ func (pr *ProductRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error
 		return fmt.Errorf("failed to convert UUID: %w", err)
 	}
 
-	return pr.queries.DeleteProduct(ctx, pgID)
+	return pr.Queries.DeleteProduct(ctx, pgID)
 }
 
 func (pr *ProductRepositoryImpl) Count(ctx context.Context) (int64, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
-	return pr.queries.CountProducts(ctx)
+	return pr.Queries.CountProducts(ctx)
 }
 
 func (pr *ProductRepositoryImpl) CountByCategory(ctx context.Context, category string) (int64, error) {
-	if pr.queries == nil {
+	if pr.Queries == nil {
 		pr.Initialize()
 	}
 
-	return pr.queries.CountProductsByCategory(ctx, &category)
+	return pr.Queries.CountProductsByCategory(ctx, &category)
 }
 
 func (pr *ProductRepositoryImpl) convertToEntity(sqlcProduct *gen.Product) *entities.Product {

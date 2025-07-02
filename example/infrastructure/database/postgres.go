@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"xcomp"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DatabaseConnection struct {
-	Config ConfigService `inject:"ConfigService"`
+	Config *xcomp.ConfigService `inject:"ConfigService"`
 	db     *pgxpool.Pool
 }
 

@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"time"
 
-	"example/infrastructure/database"
 	"example/modules/customer/domain/entities"
 	"example/modules/customer/infrastructure/query/gen"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type CustomerRepositoryImpl struct {
-	DbConnection *database.DatabaseConnection `inject:"DatabaseConnection"`
-	queries      *gen.Queries
+	DB      *pgxpool.Pool `inject:"DatabaseConnection"`
+	Queries *gen.Queries
 }
 
 func (r *CustomerRepositoryImpl) GetServiceName() string {
@@ -23,17 +23,17 @@ func (r *CustomerRepositoryImpl) GetServiceName() string {
 }
 
 func (r *CustomerRepositoryImpl) Initialize() {
-	if r.DbConnection != nil && r.DbConnection.GetDB() != nil {
-		r.queries = gen.New(r.DbConnection.GetDB())
+	if r.DB != nil {
+		r.Queries = gen.New(r.DB)
 	}
 }
 
 func (r *CustomerRepositoryImpl) Create(ctx context.Context, customer *entities.Customer) (*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
-	result, err := r.queries.CreateCustomer(ctx, gen.CreateCustomerParams{
+	result, err := r.Queries.CreateCustomer(ctx, gen.CreateCustomerParams{
 		Username: customer.Username,
 		Email:    customer.Email,
 	})
@@ -45,7 +45,7 @@ func (r *CustomerRepositoryImpl) Create(ctx context.Context, customer *entities.
 }
 
 func (r *CustomerRepositoryImpl) Update(ctx context.Context, customer *entities.Customer) (*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
@@ -54,7 +54,7 @@ func (r *CustomerRepositoryImpl) Update(ctx context.Context, customer *entities.
 		return nil, fmt.Errorf("failed to convert UUID: %w", err)
 	}
 
-	result, err := r.queries.UpdateCustomer(ctx, gen.UpdateCustomerParams{
+	result, err := r.Queries.UpdateCustomer(ctx, gen.UpdateCustomerParams{
 		ID:       pgID,
 		Username: customer.Username,
 		Email:    customer.Email,
@@ -67,7 +67,7 @@ func (r *CustomerRepositoryImpl) Update(ctx context.Context, customer *entities.
 }
 
 func (r *CustomerRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
@@ -76,11 +76,11 @@ func (r *CustomerRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error
 		return fmt.Errorf("failed to convert UUID: %w", err)
 	}
 
-	return r.queries.DeleteCustomer(ctx, pgID)
+	return r.Queries.DeleteCustomer(ctx, pgID)
 }
 
 func (r *CustomerRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
@@ -89,7 +89,7 @@ func (r *CustomerRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*en
 		return nil, fmt.Errorf("failed to convert UUID: %w", err)
 	}
 
-	result, err := r.queries.GetCustomer(ctx, pgID)
+	result, err := r.Queries.GetCustomer(ctx, pgID)
 	if err != nil {
 		return nil, r.convertError(err)
 	}
@@ -98,11 +98,11 @@ func (r *CustomerRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*en
 }
 
 func (r *CustomerRepositoryImpl) GetByUsername(ctx context.Context, username string) (*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
-	result, err := r.queries.GetCustomerByUsername(ctx, username)
+	result, err := r.Queries.GetCustomerByUsername(ctx, username)
 	if err != nil {
 		return nil, r.convertError(err)
 	}
@@ -111,11 +111,11 @@ func (r *CustomerRepositoryImpl) GetByUsername(ctx context.Context, username str
 }
 
 func (r *CustomerRepositoryImpl) GetByEmail(ctx context.Context, email string) (*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
-	result, err := r.queries.GetCustomerByEmail(ctx, email)
+	result, err := r.Queries.GetCustomerByEmail(ctx, email)
 	if err != nil {
 		return nil, r.convertError(err)
 	}
@@ -124,11 +124,11 @@ func (r *CustomerRepositoryImpl) GetByEmail(ctx context.Context, email string) (
 }
 
 func (r *CustomerRepositoryImpl) List(ctx context.Context, limit, offset int32) ([]*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
-	results, err := r.queries.ListCustomers(ctx, gen.ListCustomersParams{
+	results, err := r.Queries.ListCustomers(ctx, gen.ListCustomersParams{
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -145,11 +145,11 @@ func (r *CustomerRepositoryImpl) List(ctx context.Context, limit, offset int32) 
 }
 
 func (r *CustomerRepositoryImpl) Search(ctx context.Context, query string, limit, offset int32) ([]*entities.Customer, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
-	results, err := r.queries.SearchCustomers(ctx, gen.SearchCustomersParams{
+	results, err := r.Queries.SearchCustomers(ctx, gen.SearchCustomersParams{
 		Column1: &query,
 		Limit:   limit,
 		Offset:  offset,
@@ -167,11 +167,11 @@ func (r *CustomerRepositoryImpl) Search(ctx context.Context, query string, limit
 }
 
 func (r *CustomerRepositoryImpl) Count(ctx context.Context) (int64, error) {
-	if r.queries == nil {
+	if r.Queries == nil {
 		r.Initialize()
 	}
 
-	return r.queries.CountCustomers(ctx)
+	return r.Queries.CountCustomers(ctx)
 }
 
 func (r *CustomerRepositoryImpl) convertToEntity(sqlcCustomer *gen.Customer) *entities.Customer {
